@@ -1,7 +1,6 @@
-from random import random
-
 from src.sim.Particles.Photon import Photon
 from src.sim.QuantumState import QuantumState
+from src.utils.rand import rand_uni
 
 
 class PhotonPart:
@@ -17,7 +16,7 @@ class PhotonPart:
         self.parts = parts
 
     def read(self):
-        rand = random()
+        rand = rand_uni()
 
         for part in self.parts:
             if part == self:

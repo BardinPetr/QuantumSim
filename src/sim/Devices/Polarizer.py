@@ -1,16 +1,16 @@
-import math
-
 from src.sim.Device import Device
 from src.sim.Particles.Photon import Photon
 from src.sim.QuantumState import *
-from src.utils.math import rot_mat
+from src.utils.algebra import rot_mat
 
 
 class Polarizer(Device):
-    def __init__(self, angle: float):
-        super().__init__(name='Linear polarizer')
+    def __init__(self, angle: float,
+                 photon_in_cb=None, photon_out_cb=None,
+                 name='Linear polarizer'):
+        super().__init__(photon_in_cb, photon_out_cb, name)
 
-        self.basis = BASIS_HV * rot_mat(angle)
+        self.basis = rot_mat(angle).dot(BASIS_HV)
         self.name += f" with basis {self.basis}".replace('\n', '')
 
     def process_full(self, photon: Photon) -> Union[Photon, None]:
@@ -19,20 +19,3 @@ class Polarizer(Device):
             return photon
         else:
             return None
-
-
-if __name__ == "__main__":
-    st = QuantumState((1 / math.sqrt(2), 1 / math.sqrt(2)))
-    p = Photon(st)
-
-    # print(p.state.read(np.array([BASIS_VERTICAL, BASIS_HORIZONTAL])))
-    print(p.state)
-
-    dev = Polarizer(0)
-    print(dev)
-
-    p = dev.process_full(p)
-
-    print(p.state)
-
-    print(p.state.read(np.array([BASIS_VERTICAL, BASIS_HORIZONTAL])))

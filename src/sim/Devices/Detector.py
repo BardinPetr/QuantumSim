@@ -2,23 +2,28 @@ from typing import Union
 
 from src.sim.Device import Device
 from src.sim.Particles.Photon import Photon
-from random import random
+from src.utils.rand import rand_bin
 
 
 class Detector(Device):
     photons = []
 
-    def __init__(self, dcr=0, eff=1, dt=0, batch_size=100, photons_batch_ends_cbs=None, photon_in_cb=None, photon_out_cb=None, name="Detector"):
+    def __init__(self,
+                 dcr=0, eff=1, dt=0, batch_size=100,
+                 batch_end_cb=None, detection_cb=None, photon_in_cb=None, photon_out_cb=None,
+                 name="Detector"):
         super().__init__(photon_in_cb, photon_out_cb, name)
-        self.photons_batch_ends_cbs = list() if photons_batch_ends_cbs is None else [photons_batch_ends_cbs]
+
+        self.batch_end_cb = batch_end_cb
+        self.detection_cb = detection_cb
         self.dcr = dcr
         self.eff = eff
         self.dt = dt
         self.batch_size = batch_size
 
     def process_full(self, photon: Union[Photon, None] = None) -> Union[Photon, None]:
-        if random() > self.eff:
-            return  # детектор по ошибке не задетектировал фотон
+        if rand_bin(1 - self.eff):
+            return
 
         self.photons.append(photon)
 
@@ -37,6 +42,8 @@ class Detector(Device):
                 dead_time = photon.time + self.dt
 
                 photons_with_detector_dt += [photon]
+                if self.detection_cb is not None:
+                    self.detection_cb(photon)
 
-        for cb in self.photons_batch_ends_cbs:
-            cb(photons_with_detector_dt)
+        if self.batch_end_cb is not None:
+            self.batch_end_cb(photons_with_detector_dt)
