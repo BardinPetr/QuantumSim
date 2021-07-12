@@ -1,13 +1,7 @@
 from typing import List, Any, Union
 
-# from src.sim.Photon import Photon, PhotonPart
+from src.sim.Particles.Photon import Photon
 from src.sim.QuantumState import QuantumState
-
-
-class Photon:
-    def __init__(self, state: QuantumState):
-        self.state = state
-        self.time = 0
 
 
 class PhotonPart:
@@ -51,7 +45,7 @@ class Device:
             # return [i(PhotonPart(photon)) for i in self.outputs]
 
     def process_full(self, photon: Photon) -> Union[Photon, None]:
-        print(f"Processed photon {photon}")
+        # print(f"Processed photon {photon}")
         return photon
 
     def process_part(self, photon: PhotonPart) -> Photon:

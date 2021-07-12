@@ -1,3 +1,6 @@
+import asyncio
+
+
 class Clock:
     def __init__(self, period):
         self.period = period
