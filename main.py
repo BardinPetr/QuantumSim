@@ -1,11 +1,9 @@
+from asyncio import run
 from math import pi
 
-from src.Clock import Clock
 from src.sim.Devices.Detector import Detector
 from src.sim.Devices.HalfWavePlate import HalfWavePlate
 from src.sim.Devices.Laser import *
-from asyncio import run
-
 
 clock = Clock(25)
 

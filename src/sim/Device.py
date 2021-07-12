@@ -36,6 +36,8 @@ class Device:
 
         if isinstance(photon, Photon):
             photon = self.process_full(photon)
+            if photon is None:
+                return []
         else:
             raise NotImplementedError()
             # photon = self.process_part(photon)
@@ -54,9 +56,9 @@ class Device:
         print(f"Processed photon {photon}")
         return photon
 
-    def process_part(self, photon: PhotonPart) -> Photon:
+    def process_part(self, photon: PhotonPart):
         print(f"Processed photon part {photon}")
-        return Photon(QuantumState((complex(0, 0), complex(0, 0))))
+        raise NotImplementedError()
 
     def forward_link(self, *devs, auto=True):
         for i in devs:
