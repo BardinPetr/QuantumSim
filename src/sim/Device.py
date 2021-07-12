@@ -20,7 +20,9 @@ class PhotonPart:
 
 
 class Device:
-    def __init__(self, name="Basic Device"):
+    def __init__(self, photon_in_cb=None, photon_out_cb=None, name="Basic Device"):
+        self.photon_out_cbs = list() if photon_out_cb is None else [photon_out_cb]
+        self.photon_in_cbs = list() if photon_in_cb is None else [photon_in_cb]
         self.outputs = list()
         self.inputs = list()
         self.name = name
@@ -28,26 +30,33 @@ class Device:
     def __repr__(self):
         return self.name
 
-    def process_full(self, photon: Photon) -> Photon:
+    def process_full(self, photon: Photon) -> Union[Photon, None]:
         print(f"Processed photon {photon}")
         return photon
 
     def process_part(self, photon: PhotonPart) -> Photon:
         print(f"Processed photon part {photon}")
-
         return Photon(QuantumState((complex(0, 0), complex(0, 0))))
 
     def __call__(self, photon: Union[Photon, PhotonPart]) -> List[Any]:
+        for i in self.photon_in_cbs:
+            i(photon)
+
         if isinstance(photon, Photon):
             photon = self.process_full(photon)
         else:
-            photon = self.process_part(photon)
+            raise NotImplementedError()
+            # photon = self.process_part(photon)
 
-        # if len(self.outputs) == 1:
-        #     return [next(iter(self.outputs))(photon)]
-        # else:
-        #     # for i in PhotonPart.split(photon):
-        #     return [i(PhotonPart(photon)) for i in self.outputs]
+        for i in self.photon_out_cbs:
+            i(photon)
+
+        if len(self.outputs) > 1:
+            return self.outputs[0](photon)
+        else:
+            raise NotImplementedError()
+            # for i in PhotonPart.split(photon):
+            # return [i(PhotonPart(photon)) for i in self.outputs]
 
     def forward_link(self, *devs, auto=True):
         for i in devs:
@@ -61,17 +70,17 @@ class Device:
             if auto:
                 i.forward_link(self, auto=False)
 
+if __name__ == "__main__":
+    ds = Device("1")
+    d = Device("2")
+    df = Device("3")
 
-ds = Device("1")
-d = Device("2")
-df = Device("3")
+    ds.forward_link(d)
+    d.forward_link(df)
+    # df.forward_link(ds)
 
-ds.forward_link(d)
-d.forward_link(df)
-df.forward_link(ds)
+    print(ds.inputs, ds.outputs)
+    print(d.inputs, d.outputs)
+    print(df.inputs, df.outputs)
 
-print(ds.inputs, ds.outputs)
-print(d.inputs, d.outputs)
-print(df.inputs, df.outputs)
-
-# ds(Photon(QuantumState((0, 0))))
+    ds(Photon(QuantumState((0, 0))))
