@@ -15,7 +15,7 @@ class Polarizer(Device):
 
 
 # В теории, эта схема должна заработать сразу же после добавления Polarizer. Она запускает в 2 потока 2 лазера
-laser1 = Laser((0, 1), clock)
+laser1 = Laser((1, 0), clock)
 polarizer11 = Polarizer(pi / 4)
 polarizer12 = Polarizer(pi / 2)
 detector1 = Detector(photons_batch_ends_cbs=lambda photons: print(f'Detected {len(photons)}% of photons on detector 1'))
@@ -24,7 +24,7 @@ laser1.forward_link(polarizer11)
 polarizer11.forward_link(polarizer12)
 polarizer12.forward_link(detector1)
 
-laser2 = Laser((0, 1), clock)
+laser2 = Laser((1, 0), clock)
 polarizer21 = Polarizer(pi / 2)
 detector2 = Detector(photons_batch_ends_cbs=lambda photons: print(f'Detected {len(photons)}% of photons on detector 2'))
 

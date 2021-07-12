@@ -13,7 +13,7 @@ BASIS_LEFT = (0.5 ** 0.5, -(0.5 ** 0.5) * 1j)
 
 class QuantumState:
     def __init__(self, state: Tuple[complex, ...]):
-        self.state = state
+        self.state = np.array(state)
 
     def apply_operator(self, operator):
         self.state = np.dot(self.state, operator)
