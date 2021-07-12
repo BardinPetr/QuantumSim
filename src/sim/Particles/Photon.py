@@ -3,9 +3,9 @@ from src.sim.QuantumState import QuantumState
 
 
 class Photon:
-    def __init__(self, state: QuantumState):
+    def __init__(self, state: QuantumState, time: int = 0):
         self.state = state
-        self.time = 0
+        self.time = time
 
     # def split(self, count: int) -> list:
     #     parts = []

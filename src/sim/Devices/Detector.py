@@ -9,7 +9,7 @@ class Detector(Device):
     photons = []
 
     def __init__(self,
-                 dcr=0, eff=1, dt=0, batch_size=100,
+                 dcr=0, eff=1, dt=0, batch_size=10,
                  batch_end_cb=None, detection_cb=None, photon_in_cb=None, photon_out_cb=None,
                  name="Detector"):
         super().__init__(photon_in_cb, photon_out_cb, name)
@@ -20,6 +20,7 @@ class Detector(Device):
         self.eff = eff
         self.dt = dt
         self.batch_size = batch_size
+        self.dead_time = 0
 
     def process_full(self, photon: Union[Photon, None] = None) -> Union[Photon, None]:
         if rand_bin(1 - self.eff):
@@ -36,10 +37,9 @@ class Detector(Device):
 
         photons_with_detector_dt = []
 
-        dead_time = -1
         for photon in photons:
-            if dead_time <= photon.time:
-                dead_time = photon.time + self.dt
+            if self.dead_time <= photon.time:
+                self.dead_time = photon.time + self.dt
 
                 photons_with_detector_dt += [photon]
                 if self.detection_cb is not None:

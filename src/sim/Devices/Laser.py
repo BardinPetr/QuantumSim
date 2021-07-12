@@ -16,4 +16,4 @@ class Laser(Device):
 
     async def start(self):
         async for i in self.clock.work():
-            self(Photon(QuantumState(self.polarization)))
+            self(Photon(QuantumState(self.polarization), i))
