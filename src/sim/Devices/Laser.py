@@ -6,8 +6,11 @@ from src.sim.Particles.Photon import Photon
 
 
 class Laser(Device):
-    def __init__(self, polarization: Tuple[complex, complex], clock: Clock):
-        super().__init__(name='Laser')
+    def __init__(self, polarization: Tuple[complex, complex], clock: Clock,
+                 photon_in_cb=None, photon_out_cb=None,
+                 name='Laser'):
+        super().__init__(photon_in_cb, photon_out_cb, name)
+
         self.polarization = polarization
         self.clock = clock
 

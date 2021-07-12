@@ -1,5 +1,4 @@
 import math
-from typing import Union
 
 from src.sim.Device import Device
 from src.sim.Particles.Photon import Photon
@@ -7,8 +6,10 @@ from src.sim.QuantumState import *
 
 
 class HalfWavePlate(Device):
-    def __init__(self, angle: float):
-        super().__init__(name='Half wave plate')
+    def __init__(self, angle: float,
+                 photon_in_cb=None, photon_out_cb=None,
+                 name='Half wave plate'):
+        super().__init__(photon_in_cb, photon_out_cb, name)
 
         sin = math.sin(angle)
         cos = math.cos(angle)

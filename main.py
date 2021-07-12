@@ -1,35 +1,65 @@
-import threading
+import asyncio
+import time
 from math import pi
 
 from src.sim.Devices.Detector import Detector
 from src.sim.Devices.Laser import *
-from asyncio import run
+from src.sim.Devices.Polarizer import Polarizer
 
-clock = Clock(25)
-
-
-# TODO: заменить эту штуку на нормальную
-class Polarizer(Device):
-    def __init__(self, angle, photon_in_cb=None, photon_out_cb=None, name="Polarizer"):
-        super().__init__(photon_in_cb, photon_out_cb, name)
+cnts = [[0, 0], [0, 0]]
+LOG = False
 
 
-# В теории, эта схема должна заработать сразу же после добавления Polarizer. Она запускает в 2 потока 2 лазера
-laser1 = Laser((1, 0), clock)
-polarizer11 = Polarizer(pi / 4)
-polarizer12 = Polarizer(pi / 2)
-detector1 = Detector(photons_batch_ends_cbs=lambda photons: print(f'Detected {len(photons)}% of photons on detector 1'))
+def L(*args, **kwargs):
+    if LOG:
+        print(*args, **kwargs)
 
+
+def cnt(x, exp, i, log=0):
+    L(f"{log} {x}")
+    global cnts
+    cnts[exp][i] += 1
+
+
+clock = Clock(25, real_period=10e-6)
+# clock = Clock(25, real_period=10)
+
+
+laser1 = Laser((1, 0), clock, photon_out_cb=lambda x: cnt(x, 0, 0, 0))
+
+polarizer11 = Polarizer(0, photon_out_cb=lambda x: L(f"1 {x}"))
 laser1.forward_link(polarizer11)
+
+polarizer12 = Polarizer(pi / 2, photon_out_cb=lambda x: L(f"2 {x}"))
 polarizer11.forward_link(polarizer12)
+
+detector1 = Detector(photon_in_cb=lambda x: cnt(x, 0, 1, 4))
 polarizer12.forward_link(detector1)
 
-laser2 = Laser((1, 0), clock)
-polarizer21 = Polarizer(pi / 2)
-detector2 = Detector(photons_batch_ends_cbs=lambda photons: print(f'Detected {len(photons)}% of photons on detector 2'))
+laser2 = Laser((1, 0), clock, photon_out_cb=lambda x: cnt(x, 1, 0, 0))
 
+polarizer21 = Polarizer(0, photon_out_cb=lambda x: L(f"1 {x}"))
 laser2.forward_link(polarizer21)
-polarizer21.forward_link(detector2)
 
-threading.Thread(target=lambda: run(laser1.start())).start()
-threading.Thread(target=lambda: run(laser2.start())).start()
+polarizer22 = Polarizer(pi / 4, photon_out_cb=lambda x: L(f"2 {x}"))
+polarizer21.forward_link(polarizer22)
+
+polarizer23 = Polarizer(pi / 2, photon_out_cb=lambda x: L(f"3 {x}"))
+polarizer22.forward_link(polarizer23)
+
+detector2 = Detector(photon_in_cb=lambda x: cnt(x, 1, 1, 4))
+polarizer23.forward_link(detector2)
+
+
+def check():
+    while True:
+        print("%.5f %.5f" % (cnts[0][1] / cnts[0][0] if cnts[0][0] > 0 else 0,
+                             cnts[1][1] / cnts[1][0] if cnts[1][0] > 0 else 0), cnts)
+        time.sleep(1)
+
+
+async def main():
+    await asyncio.gather(asyncio.to_thread(check), laser1.start(), laser2.start())
+
+
+asyncio.run(main())
