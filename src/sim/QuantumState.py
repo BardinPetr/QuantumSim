@@ -12,8 +12,11 @@ BASIS_LEFT = (0.5 ** 0.5, -(0.5 ** 0.5) * 1j)
 
 
 class QuantumState:
-    def __init__(self, state: tuple[complex, ...]):
+    def __init__(self, state: Tuple[complex, ...]):
         self.state = state
+
+    def apply_operator(self, operator):
+        self.state = np.dot(self.state, operator)
 
     def read(self, basis) -> tuple:
         probability = np.absolute(
@@ -29,3 +32,6 @@ class QuantumState:
             np.conjugate(basis),
             self.state
         )
+
+    def __str__(self):
+        return str(self.state)
