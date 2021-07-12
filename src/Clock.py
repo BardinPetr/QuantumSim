@@ -2,35 +2,46 @@ import asyncio
 import time
 
 
-class Photon:
-    pass
+class Clock:
+    def __init__(self, period):
+        self.period = period
 
+    def work(self, callback: callable):
+        current_time = 0
 
-fl = open('test', 'w')
+        while True:
+            callback(current_time)
 
+            current_time += self.period
 
-async def generate(f):
-    t = time.time()
-    t1 = time.time()
-    while True:
-        dt = time.time() - t
-        # if True:  # dt > 1 / f:
-        yield Photon()
-        fl.write("%d\n" % ((time.time() - t1) * 10e6) )
-        if dt < 1 / f:
-            await asyncio.sleep((1 / f) - dt)
-        t = time.time()
-        t1 = time.time()
-
-
-async def main():
-    async for i in generate(5 * 10e3):
-        # print(i)
-        i.__hash__()
-
-
-
-asyncio.run(main())
+# class Photon:
+#     pass
+#
+#
+# fl = open('test', 'w')
+#
+#
+# async def generate(f):
+#     t = time.time()
+#     t1 = time.time()
+#     while True:
+#         dt = time.time() - t
+#         # if True:  # dt > 1 / f:
+#         yield Photon()
+#         fl.write("%d\n" % ((time.time() - t1) * 10e6))
+#         if dt < 1 / f:
+#             await asyncio.sleep((1 / f) - dt)
+#         t = time.time()
+#         t1 = time.time()
+#
+#
+# async def main():
+#     async for i in generate(5 * 10e3):
+#         # print(i)
+#         i.__hash__()
+#
+#
+# asyncio.run(main())
 
 # import time
 # from datetime import timedelta
