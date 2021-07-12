@@ -28,6 +28,7 @@ class QuantumState:
         ) ** 2
 
         self.state = basis[0] if random() < probability else basis[1]
+
         return self.state
 
     def get_probability_amplitude_for_basis(self, basis: NDArray) -> complex:
