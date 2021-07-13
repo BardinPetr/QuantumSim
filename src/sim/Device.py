@@ -1,21 +1,10 @@
-from typing import List, Any, Union
-
-from src.sim.Particles.Photon import Photon
-from src.sim.QuantumState import QuantumState
-
-
-class PhotonPart:
-    def __init__(self, base_photon: Photon):
-        self.base_photon = base_photon
-
-    @staticmethod
-    def split(photon: Photon, n):
-        return [PhotonPart(photon)] * n
+from typing import Union
+from src.sim.Wave import *
 
 
 class Device:
-    EVENT_PH_IN = "photon_in"
-    EVENT_PH_OUT = "photon_out"
+    EVENT_IN = "wave_in"
+    EVENT_OUT = "wave_out"
 
     def __init__(self, name="Basic Device"):
         self.events = dict()
@@ -27,37 +16,20 @@ class Device:
     def __repr__(self):
         return self.name
 
-    def __call__(self, photon: Union[Photon, PhotonPart]) -> List[Any]:
-        if len(self.inputs) > 1:
-            raise NotImplementedError()
+    def __call__(self, wave_in: Union[Wave, None] = None):
+        self.emit(Device.EVENT_IN, wave_in)
 
-        self.emit(Device.EVENT_PH_IN, photon)
+        result = self.process_full(wave_in)
+        if result is None:
+            return
 
-        if isinstance(photon, Photon):
-            result = self.process_full(photon)
-            if result is None:
-                return []
-            if not isinstance(result, list):
-                result = [result]
-        else:
-            # photon = self.process_part(photon)
-            raise NotImplementedError()
+        self.emit(Device.EVENT_OUT, result)
 
-        self.emit(Device.EVENT_PH_OUT, result)
+        self.outputs[0](result)
 
-        if len(self.outputs) == 1:
-            if len(result) == len(self.outputs):
-                return [i(j) for i, j in zip(self.outputs, result)]
-            else:
-                raise NotImplementedError()
-
-    def process_full(self, photon: Photon) -> List[Union[Photon, PhotonPart, None]]:
-        # print(f"Processed photon {photon}")
-        return [photon]
-
-    def process_part(self, photon: PhotonPart):
-        print(f"Processed photon part {photon}")
-        raise NotImplementedError()
+    def process_full(self, wave: Wave) -> Union[Wave, None]:
+        # print(f"Processed wave {photon}")
+        return wave
 
     def forward_link(self, *devs, auto=True):
         for i in devs:
@@ -91,9 +63,9 @@ if __name__ == "__main__":
     d = Device(name="2")
     df = Device(name="3")
 
-    ds.subscribe(Device.EVENT_PH_OUT, lambda x: print(f"OUT1 {x}"))
-    d.subscribe(Device.EVENT_PH_OUT, lambda x: print(f"OUT2 {x}"))
-    df.subscribe(Device.EVENT_PH_OUT, lambda x: print(f"OUT3 {x}"))
+    ds.subscribe(Device.EVENT_OUT, lambda x: print(f"OUT1 {x}"))
+    d.subscribe(Device.EVENT_OUT, lambda x: print(f"OUT2 {x}"))
+    df.subscribe(Device.EVENT_OUT, lambda x: print(f"OUT3 {x}"))
 
     ds.forward_link(d)
     d.forward_link(df)
@@ -103,4 +75,4 @@ if __name__ == "__main__":
     # print(d.inputs, d.outputs)
     # print(df.inputs, df.outputs)
 
-    ds(Photon(QuantumState((0, 0))))
+    ds(Wave(QuantumState((0, 0))))

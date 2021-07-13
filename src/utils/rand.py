@@ -1,4 +1,8 @@
-from numpy.random import uniform
+import math
+import random
+
+import numpy as np
+from numpy.random import *
 
 
 def rand_uni():
@@ -7,3 +11,8 @@ def rand_uni():
 
 def rand_bin(prob):
     return rand_uni() < prob
+
+
+def rand_nsphere(n):
+    v = normal(size=n)
+    return v / np.linalg.norm(v)

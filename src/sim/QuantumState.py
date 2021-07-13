@@ -23,14 +23,15 @@ class QuantumState:
 
     @staticmethod
     def random():
-        angle = uniform() * 2 * math.pi
+        nums = rand_nsphere(4)
 
-        return QuantumState(
-            (math.cos(angle), math.sin(angle))
-        )
+        return QuantumState((
+            nums[0] + nums[1] * 1j,
+            nums[2] + nums[3] * 1j,
+        ))
 
     def apply_operator(self, operator: NDArray):
-        self.state = np.dot(self.state, operator)
+        self.state = np.dot(operator, self.state)
 
     def read(self, basis: NDArray) -> NDArray:
         probability = np.absolute(

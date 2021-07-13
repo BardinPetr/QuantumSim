@@ -1,49 +1,31 @@
 from typing import Union, List
 
 from src.sim.Device import Device
-from src.sim.Particles.Photon import Photon
+from src.sim.QuantumState import QuantumState
+from src.sim.Wave import Wave
 from src.utils.rand import rand_bin
 
 
 class Detector(Device):
     EVENT_DETECTION = 'event_detection'
-    EVENT_BATCH_END = 'event_batch'
 
-    photons = []
-
-    def __init__(self,
-                 dcr=0, eff=1, dt=0, batch_size=10,
-                 name="Detector"):
+    def __init__(self, pdc=0, eff=1, dt=0, name="Detector"):
         super().__init__(name)
 
-        self.dcr = dcr
+        self.pdc = pdc
         self.eff = eff
         self.dt = dt
-        self.batch_size = batch_size
         self.dead_time = 0
 
-    def process_full(self, photon: Union[Photon, None] = None) -> None:
-        if rand_bin(1 - self.eff):
-            return None
+    def process_full(self, wave: Union[Wave] = None) -> None:
+        if rand_bin(self.pdc):
+            return self.emit(self.EVENT_DETECTION, Wave(1, QuantumState.random(), wave.time))
 
-        self.photons.append(photon)
+        n = wave.get_photons_count()
 
-        if len(self.photons) >= self.batch_size:
-            self.process_batch()
+        if rand_bin((1 - self.eff) ** n) or self.dead_time > wave.time:
+            return
 
-        return None
+        self.dead_time = wave.time + self.dt
 
-    def process_batch(self):
-        photons = sorted(self.photons, key=lambda p: p.time)
-        self.photons = []
-
-        photons_with_detector_dt = []
-
-        for photon in photons:
-            if self.dead_time <= photon.time:
-                self.dead_time = photon.time + self.dt
-
-                photons_with_detector_dt += [photon]
-                self.emit(Detector.EVENT_DETECTION, photon)
-
-        self.emit(Detector.EVENT_BATCH_END, photons_with_detector_dt)
+        self.emit(self.EVENT_DETECTION, wave)
