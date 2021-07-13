@@ -1,4 +1,4 @@
-from typing import Tuple, Union
+from typing import Tuple
 
 from src.Clock import Clock
 from src.sim.Device import *
@@ -19,4 +19,4 @@ class Laser(Device):
             if self.polarization is not None:
                 self(Photon(QuantumState(self.polarization), i))
             else:
-                self(Photon(QuantumState.random()))
+                self(Photon(QuantumState.random(), i))
