@@ -1,8 +1,9 @@
-from random import random
+import math
 from typing import Union, List, Tuple
-
 import numpy as np
 from numpy.typing import NDArray
+
+from src.utils.rand import *
 
 BASIS_VERTICAL = np.array([0, 1])
 BASIS_HORIZONTAL = np.array([1, 0])
@@ -20,6 +21,14 @@ class QuantumState:
     def __init__(self, state: Union[NDArray, Tuple[complex, complex]]):
         self.state = np.array(state) if isinstance(state, List) else state
 
+    @staticmethod
+    def random():
+        angle = uniform() * 2 * math.pi
+
+        return QuantumState(
+            (math.cos(angle), math.sin(angle))
+        )
+
     def apply_operator(self, operator: NDArray):
         self.state = np.dot(self.state, operator)
 
@@ -27,7 +36,7 @@ class QuantumState:
         probability = np.absolute(
             self.get_probability_amplitude_for_basis(basis[0])
         ) ** 2
-        self.state = basis[0] if random() < probability else basis[1]
+        self.state = basis[0] if rand_bin(probability) else basis[1]
         return self.state
 
     def get_probability_amplitude_for_basis(self, basis: NDArray) -> complex:
