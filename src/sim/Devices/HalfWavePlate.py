@@ -1,23 +1,20 @@
-import math
-
-from src.sim.Device import Device
+from src.sim.Device import Device, PhotonPart
 from src.sim.Particles.Photon import Photon
 from src.sim.QuantumState import *
 from src.utils.algebra import rot_mat
 
 
 class HalfWavePlate(Device):
-    def __init__(self, angle: float,
-                 photon_in_cb=None, photon_out_cb=None,
+    def __init__(self, angle: float, angle_control_cb=None,
                  name='Half wave plate'):
-        super().__init__(photon_in_cb, photon_out_cb, name)
+        super().__init__(name)
 
-        self.operator = rot_mat(angle)
+        self.angle_control_cb = (lambda _: angle) if angle_control_cb is None else angle_control_cb
         self.name += f" with angle {angle} rad".replace('\n', '')
 
-    def process_full(self, photon: Union[Photon, None] = None) -> Union[Photon, None]:
-        photon.state.apply_operator(self.operator)
-
+    def process_full(self, photon: Union[Photon, None] = None) -> Union[Photon, PhotonPart]:
+        angle = self.angle_control_cb(photon.time)
+        photon.state.apply_operator(rot_mat(angle))
         return photon
 
 

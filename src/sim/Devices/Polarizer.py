@@ -6,9 +6,9 @@ from src.utils.algebra import rot_mat
 
 class Polarizer(Device):
     def __init__(self, angle: float, basis=BASIS_HV,
-                 photon_in_cb=None, photon_out_cb=None, angle_control_cb=None,
+                 angle_control_cb=None,
                  name='Linear polarizer'):
-        super().__init__(photon_in_cb, photon_out_cb, name)
+        super().__init__(name)
 
         self.basis_base = basis
         self.angle_control_cb = (lambda _: angle) if angle_control_cb is None else angle_control_cb

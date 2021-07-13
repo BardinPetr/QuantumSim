@@ -14,9 +14,12 @@ class PhotonPart:
 
 
 class Device:
-    def __init__(self, photon_in_cb=None, photon_out_cb=None, name="Basic Device"):
-        self.photon_out_cbs = list() if photon_out_cb is None else [photon_out_cb]
-        self.photon_in_cbs = list() if photon_in_cb is None else [photon_in_cb]
+    EVENT_PH_IN = "photon_in"
+    EVENT_PH_OUT = "photon_out"
+
+    def __init__(self, name="Basic Device"):
+        self.events = dict()
+
         self.outputs = list()
         self.inputs = list()
         self.name = name
@@ -25,30 +28,32 @@ class Device:
         return self.name
 
     def __call__(self, photon: Union[Photon, PhotonPart]) -> List[Any]:
-        for i in self.photon_in_cbs:
-            i(photon)
+        if len(self.inputs) > 1:
+            raise NotImplementedError()
+
+        self.emit(Device.EVENT_PH_IN, photon)
 
         if isinstance(photon, Photon):
-            photon = self.process_full(photon)
-            if photon is None:
+            result = self.process_full(photon)
+            if result is None:
                 return []
+            if not isinstance(result, list):
+                result = [result]
         else:
-            raise NotImplementedError()
             # photon = self.process_part(photon)
+            raise NotImplementedError()
 
-        for i in self.photon_out_cbs:
-            i(photon)
+        self.emit(Device.EVENT_PH_OUT, result)
 
         if len(self.outputs) == 1:
-            return self.outputs[0](photon)
-        elif len(self.outputs) > 1:
-            raise NotImplementedError()
-            # for i in PhotonPart.split(photon):
-            # return [i(PhotonPart(photon)) for i in self.outputs]
+            if len(result) == len(self.outputs):
+                return [i(j) for i, j in zip(self.outputs, result)]
+            else:
+                raise NotImplementedError()
 
-    def process_full(self, photon: Photon) -> Union[Photon, None]:
+    def process_full(self, photon: Photon) -> List[Union[Photon, PhotonPart, None]]:
         # print(f"Processed photon {photon}")
-        return photon
+        return [photon]
 
     def process_part(self, photon: PhotonPart):
         print(f"Processed photon part {photon}")
@@ -66,17 +71,19 @@ class Device:
             if auto:
                 i.forward_link(self, auto=False)
 
-    def append_out_cb(self, cb):
-        self.photon_out_cbs.append(cb)
+    def subscribe(self, eid, cb):
+        if eid not in self.events:
+            self.events[eid] = dict()
+        cb_id = len(self.events[eid])
+        self.events[eid][cb_id] = cb
+        return cb_id
 
-    def remove_out_cb(self, num):
-        self.photon_out_cbs.pop(num)
+    def unsubscribe(self, eid, cb_id):
+        del self.events[eid][cb_id]
 
-    def append_in_cb(self, cb):
-        self.photon_in_cbs.append(cb)
-
-    def remove_in_cb(self, num):
-        self.photon_in_cbs.pop(num)
+    def emit(self, eid, *args):
+        for i in self.events.get(eid, {}).values():
+            i(*args)
 
 
 if __name__ == "__main__":
@@ -84,13 +91,13 @@ if __name__ == "__main__":
     d = Device(name="2")
     df = Device(name="3")
 
-    ds.append_out_cb(lambda x: print(f"OUT1 {x}"))
-    d.append_out_cb(lambda x: print(f"OUT2 {x}"))
-    df.append_out_cb(lambda x: print(f"OUT3 {x}"))
+    ds.subscribe(Device.EVENT_PH_OUT, lambda x: print(f"OUT1 {x}"))
+    d.subscribe(Device.EVENT_PH_OUT, lambda x: print(f"OUT2 {x}"))
+    df.subscribe(Device.EVENT_PH_OUT, lambda x: print(f"OUT3 {x}"))
 
     ds.forward_link(d)
     d.forward_link(df)
-    df.forward_link(ds)
+    # df.forward_link(ds)
 
     # print(ds.inputs, ds.outputs)
     # print(d.inputs, d.outputs)
