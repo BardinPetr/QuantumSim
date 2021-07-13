@@ -3,6 +3,7 @@ import math
 from src.sim.Device import Device
 from src.sim.Particles.Photon import Photon
 from src.sim.QuantumState import *
+from src.utils.algebra import rot_mat
 
 
 class HalfWavePlate(Device):
@@ -11,13 +12,8 @@ class HalfWavePlate(Device):
                  name='Half wave plate'):
         super().__init__(photon_in_cb, photon_out_cb, name)
 
-        sin = math.sin(angle)
-        cos = math.cos(angle)
-
-        self.operator = np.array([
-            [cos, sin],
-            [-sin, cos]
-        ])  # TODO: разобраться зачем там фазовый множитель
+        self.operator = rot_mat(angle)
+        self.name += f" with angle {angle} rad".replace('\n', '')
 
     def process_full(self, photon: Union[Photon, None] = None) -> Union[Photon, None]:
         photon.state.apply_operator(self.operator)
@@ -30,13 +26,9 @@ if __name__ == "__main__":
 
     p = Photon(qs)
 
-    print(p.state.read([
-        BASIS_VERTICAL, BASIS_HORIZONTAL
-    ]))
+    print(p.state.read(BASIS_HV))
 
     hwp = HalfWavePlate(math.pi / 2)
     p = hwp.process_full(p)
 
-    print(p.state.read([
-        BASIS_VERTICAL, BASIS_HORIZONTAL
-    ]))
+    print(p.state.read(BASIS_HV))
