@@ -1,5 +1,7 @@
 import asyncio
 
+import numpy as np
+
 from src.sim.Devices.Detector import Detector
 from src.sim.Devices.HalfWavePlate import HalfWavePlate
 from src.sim.Devices.Laser import *
@@ -12,6 +14,8 @@ bases = [
     []
 ]
 
+laser_period = 10
+
 
 # function for Alice and Bob that give basis and write it to bases array
 def choose_basis(i):
@@ -22,75 +26,69 @@ def choose_basis(i):
     return basis
 
 
-clock = Clock(25, real_period=10e-6)
+clock = Clock(laser_period, real_period=10e-6)
 
 # information, that Alice will send to Bob
-alice_bit = 0
-# photons, that Alice sent
-alice_photons_time = []
+alice_bits = np.random.randint(2, size=500)
+alice_bits_pointer = -1
+
+
+# get Alice bit for transmission
+def get_alice_bit():
+    global alice_bits_pointer
+    alice_bits_pointer += 1
+
+    return alice_bits[alice_bits_pointer]
+
 
 # scheme
-laser = Laser(clock, (1, 0))
-laser.subscribe(Laser.EVENT_OUT, lambda w: alice_photons_time.append(w.time))
+laser = Laser(clock, (1, 0), mu=1)
 
-alice_hwp = HalfWavePlate(0, angle_control_cb=lambda _: np.pi * (alice_bit + choose_basis(0)) / 4)
+alice_hwp = HalfWavePlate(0, angle_control_cb=lambda _: np.pi * (get_alice_bit() + choose_basis(0)) / 4)
 laser.forward_link(alice_hwp)
 
 bob_hwp = HalfWavePlate(0, angle_control_cb=lambda _: -np.pi * choose_basis(1) / 4)
 alice_hwp.forward_link(bob_hwp)
 
-detector = Detector(eff=0.5)
+detector = Detector()
 bob_hwp.forward_link(detector)
 
 # information, that bob receive from Alice
-bob_photons_time = []
+bob_last_wave_time = -laser_period
 bob_info = []
 
 
 def bob_detect_wave(wave: Wave):
-    state = wave.state.read(BASIS_HV)
+    global bob_info, bob_last_wave_time
 
-    bob_photons_time.append(wave.time)
-    bob_info.append(state[1] == 1)
+    if bob_last_wave_time < wave.time - laser_period:
+        missed_count = (wave.time - bob_last_wave_time) // laser_period - 1
+
+        bob_info += [3] * missed_count
+
+    state = wave.state.read(BASIS_HV)
+    bob_info.append(state[1])
+
+    bob_last_wave_time = wave.time
 
 
 detector.subscribe(Detector.EVENT_DETECTION, bob_detect_wave)
 
 # first argument is time, that laser will emit light
-asyncio.run(laser.start(10))
-
-# Uncomment for tests
-# alice_photons_time = [1, 2, 3, 4, 5, 6]
-# bob_photons_time = [1, 3, 4, 5]
-#
-# bases = [
-#     [0, 0, 0, 0, 0, 0],
-#     [0, 1, 1, 0, 1, 0]
-# ]
-#
-# bob_info = [False, False, False, True]
+asyncio.run(laser.start(1))
 
 # sift key
-sifted_info = []
-bob_index = 0
-for (i, t) in enumerate(alice_photons_time):
-    if bases[0][i] != bases[1][i]:
+alice_sifted_key = []
+bob_sifted_key = []
+
+for i in range(len(bob_info)):
+    if bases[0][i] != bases[1][i] or bob_info[i] == 3:
         continue
 
-    while bob_photons_time[bob_index] < t and bob_index < len(bob_photons_time) - 1:
-        bob_index += 1
-
-    if bob_photons_time[bob_index] == t:
-        sifted_info.append(bob_info[bob_index])
-
+    bob_sifted_key.append(bob_info[i])
+    alice_sifted_key.append(alice_bits[i])
 
 # write statistics
-print("Time, when waves was emitted and received")
-print(alice_photons_time)
-print(bob_photons_time)
-
-print()
-
 print("Bases, that Bob and Alice chose for measurement")
 print(bases[0])
 print(bases[1])
@@ -102,10 +100,10 @@ print(bob_info)
 
 print()
 
-print("Sifted key")
-print(sifted_info)
+print("Bob's sifted key:  ", bob_sifted_key[:25])
+print("Alice's sifted key:", alice_sifted_key[:25])
 
 print()
 
-print("E(μ):", len(alice_photons_time))
-print("Q(μ):", len(bob_info) / len(alice_photons_time))
+print("E(μ):", len(bob_info))
+print("Q(μ):", len(list(filter(lambda x: x != 3, bob_info))) / len(bob_info))
