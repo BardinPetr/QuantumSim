@@ -1,6 +1,8 @@
 import time
 from typing import Tuple
 
+from tqdm import tqdm
+
 from src.Clock import Clock
 from src.sim.Device import *
 from src.sim.Wave import Wave
@@ -15,13 +17,17 @@ class Laser(Device):
         self.polarization = polarization
         self.clock = clock
 
-    async def start(self, time_limit=None):
-        start_time = time.time()
+    async def start(self, impulse_count=None):
+        pbar = tqdm(total=impulse_count) if impulse_count else None
+
         async for i in self.clock.work():
             if self.polarization is not None:
                 self(Wave(self.mu, QuantumState(self.polarization), i))
             else:
                 self(Wave(self.mu, QuantumState.random(), i))
 
-            if time_limit and time.time() - start_time > time_limit:
-                break
+            if pbar is not None:
+                if impulse_count <= i // self.clock.period:
+                    break
+
+                pbar.update(1)

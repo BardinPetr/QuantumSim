@@ -5,6 +5,7 @@ import numpy as np
 from src.sim.Devices.Detector import Detector
 from src.sim.Devices.HalfWavePlate import HalfWavePlate
 from src.sim.Devices.Laser import *
+from src.sim.Devices.OpticFiber import OpticFiber
 from src.sim.QuantumState import BASIS_HV
 from src.utils.rand import rand_bin
 
@@ -29,8 +30,9 @@ def choose_basis(i):
 clock = Clock(laser_period, real_period=10e-6)
 
 # information, that Alice will send to Bob
-alice_bits = np.random.randint(2, size=500)
 alice_bits_pointer = -1
+alice_impulse_count = 10000
+alice_bits = np.random.randint(2, size=alice_impulse_count+1)
 
 
 # get Alice bit for transmission
@@ -50,8 +52,11 @@ laser.forward_link(alice_hwp)
 bob_hwp = HalfWavePlate(0, angle_control_cb=lambda _: -np.pi * choose_basis(1) / 4)
 alice_hwp.forward_link(bob_hwp)
 
+of = OpticFiber(50, 0.2, 0.05)
+bob_hwp.forward_link(of)
+
 detector = Detector()
-bob_hwp.forward_link(detector)
+of.forward_link(detector)
 
 # information, that bob receive from Alice
 bob_last_wave_time = -laser_period
@@ -75,7 +80,7 @@ def bob_detect_wave(wave: Wave):
 detector.subscribe(Detector.EVENT_DETECTION, bob_detect_wave)
 
 # first argument is time, that laser will emit light
-asyncio.run(laser.start(1))
+asyncio.run(laser.start(alice_impulse_count))
 
 # sift key
 alice_sifted_key = []
@@ -105,5 +110,6 @@ print("Alice's sifted key:", alice_sifted_key[:25])
 
 print()
 
-print("E(μ):", len(bob_info))
-print("Q(μ):", len(list(filter(lambda x: x != 3, bob_info))) / len(bob_info))
+print("E(μ):", alice_impulse_count)
+print("Q(μ):", len(list(filter(lambda x: x != 3, bob_info))) / alice_impulse_count)
+print("QBER:", np.sum(np.logical_xor(bob_sifted_key, alice_sifted_key)) / len(bob_sifted_key))

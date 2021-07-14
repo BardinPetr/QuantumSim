@@ -18,7 +18,7 @@ class Detector(Device):
         self.dead_time = 0
 
     def process_full(self, wave: Union[Wave] = None) -> None:
-        if rand_bin(self.pdc):
+        if rand_bin(2 * self.pdc):
             return self.emit(self.EVENT_DETECTION, Wave(1, QuantumState.random(), wave.time))
 
         n = wave.get_photons_count()

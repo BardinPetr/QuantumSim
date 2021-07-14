@@ -17,7 +17,7 @@ class HalfWavePlate(Device):
     def process_full(self, wave: Union[Wave, None] = None) -> Union[Wave]:
         angle = self.angle_control_cb(wave.time)
 
-        wave.state.apply_operator(rot_mat(angle * 2)) # * np.exp(-1j * np.pi / 2)
+        wave.state.apply_operator(rot_mat(angle * 2))  # * np.exp(-1j * np.pi / 2)
         return wave
 
 
