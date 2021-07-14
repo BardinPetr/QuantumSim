@@ -1,13 +1,16 @@
 from typing import Union
+
+from src.sim.MainDevices.Eventable import Eventable
 from src.sim.Wave import *
 
 
-class Device:
+class Device(Eventable):
     EVENT_IN = "wave_in"
     EVENT_OUT = "wave_out"
+    EVENT_AFTER_FORWARD_LINK = "after_forward_link"
 
     def __init__(self, name="Basic Device"):
-        self.events = dict()
+        super().__init__()
 
         self.outputs = list()
         self.inputs = list()
@@ -36,26 +39,13 @@ class Device:
             self.outputs.append(i)
             if auto:
                 i.back_link(self, auto=False)
+        self.emit(self.EVENT_AFTER_FORWARD_LINK)
 
     def back_link(self, *devs, auto=True):
         for i in devs:
             self.inputs.append(i)
             if auto:
                 i.forward_link(self, auto=False)
-
-    def subscribe(self, eid, cb):
-        if eid not in self.events:
-            self.events[eid] = dict()
-        cb_id = len(self.events[eid])
-        self.events[eid][cb_id] = cb
-        return cb_id
-
-    def unsubscribe(self, eid, cb_id):
-        del self.events[eid][cb_id]
-
-    def emit(self, eid, *args):
-        for i in self.events.get(eid, {}).values():
-            i(*args)
 
 
 if __name__ == "__main__":

@@ -1,13 +1,11 @@
-import numpy as np
-
-from src.sim.Device import Device
+from src.sim.MainDevices.Device import Device
 from src.sim.Wave import Wave
 from src.sim.QuantumState import *
 from src.utils.algebra import rot_mat
 
 
 class HalfWavePlate(Device):
-    def __init__(self, angle: float, angle_control_cb=None,
+    def __init__(self, angle: float = 0, angle_control_cb=None,
                  name='Half wave plate'):
         super().__init__(name)
 

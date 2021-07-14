@@ -1,8 +1,14 @@
 from asyncio import sleep
 
+from src.sim.MainDevices.Device import Device
 
-class Clock:
-    def __init__(self, period, real_period=0):
+
+class Clock(Device):
+    EVENT_TICK = "event_tick"
+
+    def __init__(self, period, real_period=0, name="Clock"):
+        super().__init__(name)
+
         self.period = period
         self.real_period = real_period
         self.run = True
@@ -15,6 +21,7 @@ class Clock:
 
         while self.run:
             yield current_time
+            self.emit(Clock.EVENT_TICK, current_time)
             current_time += self.period
             if self.real_period > 0:
                 await sleep(self.real_period)

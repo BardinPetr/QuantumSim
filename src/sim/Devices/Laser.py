@@ -1,10 +1,10 @@
-import time
-from typing import Tuple
+from typing import Tuple, Union
 
 from tqdm import tqdm
 
-from src.Clock import Clock
-from src.sim.Device import *
+from src.sim.Devices.Clock import Clock
+from src.sim.MainDevices.Device import Device
+from src.sim.QuantumState import QuantumState
 from src.sim.Wave import Wave
 
 
@@ -27,7 +27,8 @@ class Laser(Device):
                 self(Wave(self.mu, QuantumState.random(), i))
 
             if pbar is not None:
-                if impulse_count <= i // self.clock.period:
+                if impulse_count <= i // self.clock.period + 1:
                     break
 
-                pbar.update(1)
+                if i // self.clock.period % 100 == 0:
+                    pbar.update(100)

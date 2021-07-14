@@ -1,6 +1,6 @@
-from src.sim.Device import Device
-from src.sim.Particles.Photon import Photon
+from src.sim.MainDevices.Device import Device
 from src.sim.QuantumState import *
+from src.sim.Wave import Wave
 from src.utils.algebra import rot_mat
 
 
@@ -19,7 +19,7 @@ class Polarizer(Device):
     def _get_basis(self, angle):
         return rot_mat(angle).dot(self.basis_base)
 
-    def process_full(self, photon: Photon) -> Union[Photon, None]:
+    def process_full(self, photon: Wave) -> Union[Wave, None]:
         basis = self._get_basis(self.angle_control_cb(photon.time))
         state = photon.state.read(basis)
         if np.allclose(state, basis[0], rtol=10e-6):

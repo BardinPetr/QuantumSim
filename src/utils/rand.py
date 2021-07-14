@@ -9,7 +9,7 @@ def rand_uni():
     return uniform(0, 1)
 
 
-def rand_bin(prob):
+def rand_bin(prob=0.5):
     return rand_uni() < prob
 
 

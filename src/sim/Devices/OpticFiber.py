@@ -2,8 +2,7 @@ from typing import Union
 
 import numpy as np
 
-from src.sim.Device import Device
-from src.sim.QuantumState import QuantumState
+from src.sim.MainDevices.Device import Device
 from src.sim.Wave import Wave
 from src.utils.algebra import rot_mat
 from src.utils.rand import rand_bin

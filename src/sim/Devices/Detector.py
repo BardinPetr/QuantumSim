@@ -1,6 +1,6 @@
-from typing import Union, List
+from typing import Union
 
-from src.sim.Device import Device
+from src.sim.MainDevices.Device import Device
 from src.sim.QuantumState import QuantumState
 from src.sim.Wave import Wave
 from src.utils.rand import rand_bin

@@ -2,7 +2,7 @@ from typing import Union
 
 import numpy as np
 
-from src.sim.Device import Device
+from src.sim.MainDevices.Device import Device
 from src.sim.Particles.Photon import Photon
 from src.sim.QuantumState import BASIS_HV
 from src.utils.algebra import rot_mat
