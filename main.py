@@ -24,7 +24,7 @@ stat = Statistics(hp)
 stat.subscribe(Statistics.EVENT_RESULT, Statistics.log_statistics)
 
 # quantum scheme
-alice = Alice(hp, classic_channel=cc, session_size=10**5)
+alice = Alice(hp, classic_channel=cc, session_size=5*10**4)
 alice.subscribe(EndpointDevice.EVENT_KEY_FINISHED, stat.alice_update)
 
 of = OpticFiber(length=hp.fiber_length, deltaopt=hp.delta_opt, probopt=hp.prob_opt)

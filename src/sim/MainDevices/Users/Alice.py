@@ -42,11 +42,12 @@ class Alice(EndpointDevice):
 
     def save_key(self, key):
         self.emit(EndpointDevice.EVENT_KEY_FINISHED, (key, self.session_size))
-        print("ALICE GOT KEY:", *key[:25].tolist(), sep="\t")
+        # print("ALICE GOT KEY:", *key[:25].tolist(), sep="\t")
 
     def start(self):
         while True:
             self.base_key = []
+            self.bases = []
 
             asyncio.run(self.laser.start(self.session_size))
             self.check_bases()

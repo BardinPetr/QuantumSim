@@ -2,6 +2,7 @@ import numpy as np
 
 from src.sim.Data.HardwareParams import HardwareParams
 from src.sim.MainDevices.Eventable import Eventable
+from src.sim.Math.QBERGen import generate
 from src.sim.Utils.StatisticsData import StatisticsData
 
 
@@ -21,15 +22,17 @@ class Statistics(Eventable):
         self.bob_key = None
 
     def check(self):
-        if self.alice_key and self.bob_key:
+        if self.alice_key is not None and self.bob_key is not None:
             data = StatisticsData(
                 self.alice_key,
                 self.bob_key,
                 self.count_qber(),
                 self.received_waves_count,
-                self.emitted_waves_count)
+                self.emitted_waves_count,
+                self.params
+            )
 
-            self.emit(self.EVENT_RESULT, data)
+            self.emit(self.EVENT_RESULT, data, self.params)
             self.clear()
 
     def alice_update(self, data):
@@ -41,12 +44,20 @@ class Statistics(Eventable):
         self.check()
 
     def count_qber(self):
-        return np.sum(self.alice_key == self.bob_key) / len(self.alice_key)
+        return np.sum(self.alice_key != self.bob_key) / len(self.alice_key)
 
     @staticmethod
-    def log_statistics(data: StatisticsData):
+    def log_statistics(data: StatisticsData, params: HardwareParams):
         print('Generated key length:', len(data.alice_key))
 
         print()
+        print('Practical:')
         print('QBER:', data.qber)
         print('Q(μ):', data.received_waves_count / data.emitted_waves_count)
+
+        # (r_sift, qber_theoretical, Q), *_ = generate(params, data.emitted_waves_count)
+
+        # print()
+        # print('Theoretical:')
+        # print('QBER:', qber_theoretical)
+        print('Q(μ):')

@@ -17,7 +17,7 @@ def key_with_mist_gen(base_key, qber):
     return mist_arr
 
 
-def generate(params: HardwareParams, line_length, key_length):
+def generate(params: HardwareParams, key_length):
     """
     dcr = 5  # в герцах теневой счет
     f = 5 * 10 ** 6  # частота генерации сигнала
@@ -27,7 +27,7 @@ def generate(params: HardwareParams, line_length, key_length):
     m = 0.2  # среднее число фотонов
     td = 5 * 10 ** -6  # длительность восстановления детектора
     """
-    s_opt = params.delta_opt * line_length  # в ДБ степень затухания сигнала
+    s_opt = params.delta_opt * params.fiber_length  # в ДБ степень затухания сигнала
     t = 10 ** (- s_opt / 10)  # Т оптическое, transmission
     Q = 2 * params.pdc + 1 - math.e ** (-t * params.eff * params.mu)
     qber = (params.pdc + params.prob_opt * (1 - math.e ** (-t * params.eff * params.mu))) / Q
@@ -39,7 +39,7 @@ def generate(params: HardwareParams, line_length, key_length):
     miss_counter = KEY != KEY_WITH_MIST
     miss_counter = miss_counter[miss_counter].size
 
-    return (r_sift, qber, miss_counter / key_length), KEY, KEY_WITH_MIST
+    return (r_sift, qber, Q), KEY, KEY_WITH_MIST
 
 
 if __name__ == "__main__":

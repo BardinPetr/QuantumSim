@@ -56,13 +56,14 @@ class Bob(EndpointDevice):
             ).to_json().encode('utf-8')
         )
 
+        self.bases = []
         self.base_key = []
         self.last_wave_time = -self.hard_params.laser_period
         self.received_waves_count = 0
 
     def save_key(self, key):
         self.emit(EndpointDevice.EVENT_KEY_FINISHED, (key, self.received_waves_count))
-        print("\nBOB GOT KEY:", *key[:25], sep="\t")
+        # print("\nBOB GOT KEY:", *key[:25], sep="\t")
 
     def gen_optic_scheme(self):
         self.hwp = HalfWavePlate(angle_control_cb=lambda _: -np.pi * self.choose_basis() / 4)
