@@ -60,6 +60,7 @@ class Bob(EndpointDevice):
         self.base_key = []
         self.last_wave_time = -self.hard_params.laser_period
         self.received_waves_count = 0
+        self.detector.reset()
 
     def save_key(self, key):
         self.emit(EndpointDevice.EVENT_KEY_FINISHED, (key, self.received_waves_count))
@@ -67,17 +68,16 @@ class Bob(EndpointDevice):
 
     def gen_optic_scheme(self):
         self.hwp = HalfWavePlate(angle_control_cb=lambda _: -np.pi * self.choose_basis() / 4)
-        detector = Detector(
+        self.forward_link(self.hwp)
+
+        self.detector = Detector(
             pdc=self.hard_params.pdc,
             eff=self.hard_params.eff,
             dt=self.hard_params.dt
         )
-        detector.subscribe(Detector.EVENT_DETECTION, self.on_detection)
+        self.detector.subscribe(Detector.EVENT_DETECTION, self.on_detection)
 
-        self.hwp.forward_link(detector)
-
-    def process_full(self, wave: Wave) -> None:
-        self.hwp(wave)
+        self.hwp.forward_link(self.detector)
 
     def fix_photon_statistics(self, time):
         if self.last_wave_time < time - self.hard_params.laser_period:

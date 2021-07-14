@@ -1,5 +1,3 @@
-import asyncio
-
 import numpy as np
 
 from src.sim.Data.HardwareParams import HardwareParams
@@ -44,12 +42,12 @@ class Alice(EndpointDevice):
         self.emit(EndpointDevice.EVENT_KEY_FINISHED, (key, self.session_size))
         # print("ALICE GOT KEY:", *key[:25].tolist(), sep="\t")
 
-    def start(self):
+    def start(self, progress_bar=True):
         while True:
             self.base_key = []
             self.bases = []
 
-            asyncio.run(self.laser.start(self.session_size))
+            self.laser.start(self.session_size, progress_bar)
             self.check_bases()
 
     def check_bases(self):
@@ -70,7 +68,5 @@ class Alice(EndpointDevice):
         self.hwp = HalfWavePlate(angle_control_cb=lambda _: np.pi * (self.get_bit() + self.choose_basis()) / 4)
         self.laser.forward_link(self.hwp)
 
-        self.subscribe(
-            Device.EVENT_AFTER_FORWARD_LINK,
-            lambda: self.hwp.forward_link(self.outputs[0])
-        )
+        self.hwp.forward_link(self)
+

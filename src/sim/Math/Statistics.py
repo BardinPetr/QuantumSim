@@ -2,7 +2,6 @@ import numpy as np
 
 from src.sim.Data.HardwareParams import HardwareParams
 from src.sim.MainDevices.Eventable import Eventable
-from src.sim.Math.QBERGen import generate
 from src.sim.Utils.StatisticsData import StatisticsData
 
 
@@ -48,6 +47,7 @@ class Statistics(Eventable):
 
     @staticmethod
     def log_statistics(data: StatisticsData, params: HardwareParams):
+        print()
         print('Generated key length:', len(data.alice_key))
 
         print()
@@ -60,4 +60,4 @@ class Statistics(Eventable):
         # print()
         # print('Theoretical:')
         # print('QBER:', qber_theoretical)
-        print('Q(μ):')
+        # print('Q(μ):')

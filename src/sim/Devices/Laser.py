@@ -17,18 +17,20 @@ class Laser(Device):
         self.polarization = polarization
         self.clock = clock
 
-    async def start(self, impulse_count=None):
-        pbar = tqdm(total=impulse_count) if impulse_count else None
+    def start(self, impulse_count=None, progress_bar=True):
+        # print("\n")
+        progress_bar = progress_bar and (impulse_count is not None)
+        if progress_bar:
+            pbar = tqdm(total=impulse_count, smoothing=0.1)
 
-        async for i in self.clock.work():
+        for i in self.clock.work():
             if self.polarization is not None:
                 self(Wave(self.mu, QuantumState(self.polarization), i))
             else:
                 self(Wave(self.mu, QuantumState.random(), i))
 
-            if pbar is not None:
+            if impulse_count is not None:
                 if impulse_count <= i // self.clock.period + 1:
                     break
-
-                if i // self.clock.period % 100 == 0:
-                    pbar.update(100)
+            if progress_bar:
+                pbar.update(1)

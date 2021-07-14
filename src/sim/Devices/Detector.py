@@ -17,6 +17,9 @@ class Detector(Device):
         self.dt = dt
         self.dead_time = 0
 
+    def reset(self):
+        self.dead_time = 0
+
     def process_full(self, wave: Union[Wave] = None) -> None:
         if rand_bin(2 * self.pdc):
             return self.emit(self.EVENT_DETECTION, Wave(1, QuantumState.random(), wave.time))

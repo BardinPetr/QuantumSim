@@ -1,4 +1,4 @@
-from asyncio import sleep
+from time import sleep
 
 from src.sim.MainDevices.Device import Device
 
@@ -16,7 +16,7 @@ class Clock(Device):
     def __del__(self):
         self.run = False
 
-    async def work(self):
+    def work(self):
         current_time = 0
 
         while self.run:
@@ -24,4 +24,4 @@ class Clock(Device):
             self.emit(Clock.EVENT_TICK, current_time)
             current_time += self.period
             if self.real_period > 0:
-                await sleep(self.real_period)
+                sleep(self.real_period)

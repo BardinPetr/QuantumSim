@@ -28,7 +28,8 @@ class Device(Eventable):
 
         self.emit(Device.EVENT_OUT, result)
 
-        self.outputs[0](result)
+        if len(self.outputs) > 0:
+            self.outputs[0](result)
 
     def process_full(self, wave: Wave) -> Union[Wave, None]:
         # print(f"Processed wave {photon}")
