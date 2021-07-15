@@ -8,6 +8,9 @@ from src.sim.MainDevices.Users.Alice import Alice
 from src.sim.MainDevices.Users.Bob import Bob
 from src.sim.Math.StatAggregator import StatAggregator
 from src.sim.Math.Statistics import Statistics
+import logging
+
+logging.basicConfig(filename='log.log', encoding='utf-8', level=logging.DEBUG)
 
 hp = HardwareParams(
     polarization=(1, 0),
@@ -60,7 +63,7 @@ def monitor(conn: Queue):
 
 
 def main():
-    n = 8
+    n = 2
     with Pool(processes=n + 1) as pool:
         m = Manager()
         q = m.Queue()

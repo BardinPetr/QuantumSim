@@ -1,13 +1,13 @@
 from time import sleep
 
-from src.sim.MainDevices.Device import Device
+from src.sim.MainDevices.Eventable import Eventable
 
 
-class Clock(Device):
+class Clock(Eventable):
     EVENT_TICK = "event_tick"
 
-    def __init__(self, period, real_period=0, name="Clock"):
-        super().__init__(name)
+    def __init__(self, period, real_period=0):
+        super().__init__()
 
         self.period = period
         self.real_period = real_period

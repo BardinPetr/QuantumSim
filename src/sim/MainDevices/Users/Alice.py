@@ -19,7 +19,7 @@ class Alice(EndpointDevice):
                  name: str = "Alice"):
         super().__init__(params, name)
 
-        self.clock = Clock(params.laser_period, name="Alice's clock")
+        self.clock = Clock(params.laser_period)
 
         self.base_key = []
 
