@@ -10,7 +10,6 @@ class BinaryFile:
         self.path = path
 
         self.write_memory = np.array([], dtype='bool')
-        self.read_memory = np.array([], dtype='bool')
 
     def read(self, start: int, end: int):
         start_byte = floor(start / 8)
