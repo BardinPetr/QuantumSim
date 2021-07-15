@@ -17,7 +17,7 @@ def key_with_mist_gen(base_key, qber):
     return mist_arr
 
 
-def generate(params: HardwareParams, key_length):
+def simulate_bb84(params: HardwareParams):
     """
     dcr = 5  # в герцах теневой счет
     f = 5 * 10 ** 6  # частота генерации сигнала
@@ -34,12 +34,7 @@ def generate(params: HardwareParams, key_length):
     r_raw = params.laser_freq * Q / (1 + params.dt * params.laser_freq * Q)
     r_sift = r_raw / 2
 
-    KEY = key_gen(key_length)
-    KEY_WITH_MIST = key_with_mist_gen(key_length, qber)
-    miss_counter = KEY != KEY_WITH_MIST
-    miss_counter = miss_counter[miss_counter].size
-
-    return (r_sift, qber, Q), KEY, KEY_WITH_MIST
+    return r_sift, qber, Q
 
 
 if __name__ == "__main__":

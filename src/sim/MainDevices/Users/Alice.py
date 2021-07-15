@@ -5,7 +5,6 @@ from src.sim.Devices.Clock import Clock
 from src.sim.Devices.HalfWavePlate import HalfWavePlate
 from src.sim.Devices.Laser import Laser
 from src.sim.MainDevices.ClassicChannel import ClassicChannel
-from src.sim.MainDevices.Device import Device
 from src.sim.MainDevices.EndpointDevice import EndpointDevice
 from src.sim.Utils.BB84ClassicChannelData import BB84ClassicChannelData
 from src.utils.rand import rand_bin

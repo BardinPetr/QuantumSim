@@ -1,5 +1,5 @@
-import math
 from typing import Union, List, Tuple
+
 import numpy as np
 from numpy.typing import NDArray
 
@@ -30,7 +30,7 @@ class QuantumState:
             nums[2] + nums[3] * 1j,
         ))
 
-    def apply_operator(self, operator: NDArray):
+    def apply_operator(self, operator):
         self.state = np.dot(operator, self.state)
 
     def read(self, basis: NDArray) -> NDArray:

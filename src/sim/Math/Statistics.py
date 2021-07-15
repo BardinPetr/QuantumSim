@@ -1,3 +1,5 @@
+from time import time
+
 import numpy as np
 
 from src.sim.Data.HardwareParams import HardwareParams
@@ -15,6 +17,8 @@ class Statistics(Eventable):
         self.clear()
 
     def clear(self):
+        self.time_start = time()
+        self.speed = 0
         self.received_waves_count = 0
         self.emitted_waves_count = 0
         self.alice_key = None
@@ -22,16 +26,18 @@ class Statistics(Eventable):
 
     def check(self):
         if self.alice_key is not None and self.bob_key is not None:
+            self.speed = len(self.alice_key) / (time() - self.time_start)
+
             data = StatisticsData(
-                self.alice_key,
-                self.bob_key,
+                self.speed,
                 self.count_qber(),
                 self.received_waves_count,
                 self.emitted_waves_count,
+                len(self.alice_key),
                 self.params
             )
 
-            self.emit(self.EVENT_RESULT, data, self.params)
+            self.emit(self.EVENT_RESULT, data)
             self.clear()
 
     def alice_update(self, data):
@@ -48,16 +54,9 @@ class Statistics(Eventable):
     @staticmethod
     def log_statistics(data: StatisticsData, params: HardwareParams):
         print()
-        print('Generated key length:', len(data.alice_key))
+        print('Generated key length:', data.key_length)
 
-        print()
-        print('Practical:')
+        print('Speed:', data.speed)
         print('QBER:', data.qber)
-        print('Q(μ):', data.received_waves_count / data.emitted_waves_count)
-
-        # (r_sift, qber_theoretical, Q), *_ = generate(params, data.emitted_waves_count)
-
-        # print()
-        # print('Theoretical:')
-        # print('QBER:', qber_theoretical)
-        # print('Q(μ):')
+        print('Rsift:', data.r_sift)
+        print('Q(μ):', data.q)

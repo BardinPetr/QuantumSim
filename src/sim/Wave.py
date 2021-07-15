@@ -1,5 +1,6 @@
-from src.sim.QuantumState import QuantumState
 import numpy as np
+
+from src.sim.QuantumState import QuantumState
 
 
 class Wave:

@@ -19,12 +19,11 @@ class StatAggregator(Eventable):
         self.time_start = time()
 
     def update(self, data: StatisticsData, params: HardwareParams):
-        logging.debug(data.alice_key.tolist())
-        logging.debug(data.bob_key.tolist())
-        logging.debug('------------------')
+        # logging.debug(data.alice_key.tolist())
+        # logging.debug(data.bob_key.tolist())
+        # logging.debug('------------------')
 
         self.key_a.extend(data.alice_key)
         self.key_b.extend(data.bob_key)
         self.speed = len(self.key_a) / (time() - self.time_start)
-        print(data.alice_key[:5])
         self.emit(StatAggregator.EVENT_UPDATE, (self.key_a, self.key_b, self.speed, len(data.alice_key)))
