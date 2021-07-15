@@ -15,14 +15,12 @@ class KeyManager:
     KEY_FRAME_SIZE = 50
     KEY_BLOCK_SIZE = 1000
 
-    def __init__(self, directory: str, remove_after_use=True):
+    def __init__(self, directory: str):
         # files
         self.key_file = BinaryFile(path=os.path.join(directory, self.KEY_PATH))
         self.temp_key_file = BinaryFile(path=os.path.join(directory, self.TEMP_KEY_PATH))
         self.psk_path = os.path.join(directory, self.PSK_PATH)
         self.ctrl_path = os.path.join(directory, self.CTRL_PATH)
-
-        self.remove_after_use = remove_after_use
 
         if not os.path.isfile(self.ctrl_path) or os.path.getsize(self.ctrl_path) == 0:
             self.save_cur_pos(0, 0)
@@ -42,13 +40,14 @@ class KeyManager:
     def clear(self):
         self.key_file.clear()
 
-    def get(self, length: int):
+    def get(self, length: int, bits=True):
+        length = length if bits else length * 8
         key = self.key_file.read(self.cur_pos, self.cur_pos + length - 1)
 
         self.cur_pos += length
         self.save_cur_pos()
 
-        return key
+        return key if bits else np.packbits(key)
 
     def append(self, key: NDArray):
         self.temp_key_file.append(key)
@@ -62,19 +61,19 @@ class KeyManager:
 
 
 if __name__ == '__main__':
-    key = KeyManager(
-        '../data/alice',
-        False
-    )
+    key = KeyManager('/home/petr/Desktop/QuantumLink/data/alice/')
 
-    key.clear()
-
-    key.append(np.array([True, False, True, True], dtype='bool'))
-    key.append(np.array([True, False, True, True, False], dtype='bool'))
-    print(key.get(5))
-    print(key.get(3))
+    # key.clear()
+    # print()
+    # key.append(np.random.uniform(0, 1, 10000) > 0.5)
+    # key.append(np.array([True, False, True, True], dtype='bool'))
+    # key.append(np.array([True, False, True, True, False], dtype='bool'))
+    # print(key.get(5))
+    # print(key.get(3))
     #
     # del key
     # c[0:5] = [0, 0, 0, 0, 0]
     # c.bin
     # print(c.bin)
+
+    # print(key.get(10))

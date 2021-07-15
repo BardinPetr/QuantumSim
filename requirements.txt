@@ -1,6 +1,7 @@
 numpy
 matplotlib
-psutil
 tqdm
 dataclasses_json
-ray
+python-pytun
+pyroute2
+pyshark
