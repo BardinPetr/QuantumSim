@@ -8,13 +8,20 @@ from src.sim.Utils.BinaryFile import BinaryFile
 
 class KeyManager:
     KEY_PATH: str = 'key'
+    TEMP_KEY_PATH: str = 'temp_key'
     PSK_PATH: str = 'psk'
     CTRL_PATH = 'ctrl'
 
+    KEY_FRAME_SIZE = 50
+    KEY_BLOCK_SIZE = 1000
+
     def __init__(self, directory: str, remove_after_use=True):
+        # files
         self.key_file = BinaryFile(path=os.path.join(directory, self.KEY_PATH))
+        self.temp_key_file = BinaryFile(path=os.path.join(directory, self.TEMP_KEY_PATH))
         self.psk_path = os.path.join(directory, self.PSK_PATH)
         self.ctrl_path = os.path.join(directory, self.CTRL_PATH)
+
         self.remove_after_use = remove_after_use
 
         if not os.path.isfile(self.ctrl_path) or os.path.getsize(self.ctrl_path) == 0:
@@ -44,7 +51,14 @@ class KeyManager:
         return key
 
     def append(self, key: NDArray):
-        self.key_file.append(key)
+        self.temp_key_file.append(key)
+
+        if len(self.temp_key_file) > self.KEY_FRAME_SIZE:
+            self.key_file.append(self.postprocess_key(self.temp_key_file.read_all()))
+            self.temp_key_file.clear()
+
+    def postprocess_key(self, data):
+        return data
 
 
 if __name__ == '__main__':

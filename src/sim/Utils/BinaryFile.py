@@ -49,6 +49,9 @@ class BinaryFile:
         if os.path.isfile(self.path):
             os.unlink(self.path)
 
+    def __len__(self):
+        return os.path.getsize(self.path) * 8
+
 
 if __name__ == "__main__":
     file = BinaryFile(path='d:/Programs/PycharmProjects/QuantumSim/data/test.txt')

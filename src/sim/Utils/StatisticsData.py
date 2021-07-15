@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 
 from dataclasses_json import dataclass_json
-from numpy.typing import NDArray
 
 from src.sim.Data.HardwareParams import HardwareParams
 

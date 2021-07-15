@@ -1,6 +1,7 @@
 import os
 
 from src.FileWriter import FileWriter
+
 from src.KeyManager import KeyManager
 from src.sim.Data.HardwareParams import HardwareParams
 from src.sim.Devices.OpticFiber import OpticFiber
@@ -24,10 +25,10 @@ def main():
         fiber_length=10
     )
 
-    fw = FileWriter(f'{os.getcwd()}/data/statistics.json', [
-        KeyManager(directory=f'{os.getcwd()}/data/alice'),
-        KeyManager(directory=f'{os.getcwd()}/data/bob')
-    ])
+    fw = FileWriter(f'{os.getcwd()}/data/statistics.json')
+
+    km_alice = KeyManager(directory=f'{os.getcwd()}/data/alice')
+    km_bob = KeyManager(directory=f'{os.getcwd()}/data/bob')
 
     cc = ClassicChannel(ClassicChannel.MODE_LOCAL)
 
@@ -36,14 +37,14 @@ def main():
 
     alice = Alice(hp, classic_channel=cc, session_size=10 ** 4)
     alice.subscribe(EndpointDevice.EVENT_KEY_FINISHED, stat.alice_update)
-    alice.subscribe(EndpointDevice.EVENT_KEY_FINISHED, lambda data: fw.append_key(0, data[0]))
+    alice.subscribe(EndpointDevice.EVENT_KEY_FINISHED, lambda data: km_alice.append(data[0]))
 
     of = OpticFiber(length=hp.fiber_length, deltaopt=hp.delta_opt, probopt=hp.prob_opt)
     alice.forward_link(of)
 
     bob = Bob(hp, classic_channel=cc)
     bob.subscribe(EndpointDevice.EVENT_KEY_FINISHED, stat.bob_update)
-    bob.subscribe(EndpointDevice.EVENT_KEY_FINISHED, lambda data: fw.append_key(1, data[0]))
+    bob.subscribe(EndpointDevice.EVENT_KEY_FINISHED, lambda data: lambda data: km_bob.append(data[0]))
 
     of.forward_link(bob)
 

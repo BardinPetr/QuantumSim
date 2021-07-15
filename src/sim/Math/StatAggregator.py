@@ -1,4 +1,3 @@
-import logging
 from time import time
 
 from src.sim.Data.HardwareParams import HardwareParams
