@@ -7,13 +7,17 @@ from src.sim.Utils.BinaryFile import BinaryFile
 
 
 class KeyManager:
-    def __init__(self, path, psk_path, ctrl_path, remove_after_use=True):
-        self.key_file = BinaryFile(path=path)
-        self.psk_path = psk_path
-        self.ctrl_path = ctrl_path
+    KEY_PATH: str = 'key'
+    PSK_PATH: str = 'psk'
+    CTRL_PATH = 'ctrl'
+
+    def __init__(self, directory: str, remove_after_use=True):
+        self.key_file = BinaryFile(path=os.path.join(directory, self.KEY_PATH))
+        self.psk_path = os.path.join(directory, self.PSK_PATH)
+        self.ctrl_path = os.path.join(directory, self.CTRL_PATH)
         self.remove_after_use = remove_after_use
 
-        if not os.path.isfile(ctrl_path) or os.path.getsize(ctrl_path) == 0:
+        if not os.path.isfile(self.ctrl_path) or os.path.getsize(self.ctrl_path) == 0:
             self.save_cur_pos(0, 0)
 
         self.cur_pos, self.cur_psk_pos = self.load_cur_pos()
@@ -45,9 +49,7 @@ class KeyManager:
 
 if __name__ == '__main__':
     key = KeyManager(
-        '../data/alice.key',
-        '../data/alice.psk.key',
-        '../data/ctrl.dat',
+        '../data/alice',
         False
     )
 

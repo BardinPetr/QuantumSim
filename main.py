@@ -1,4 +1,7 @@
+import os
+
 from src.FileWriter import FileWriter
+from src.KeyManager import KeyManager
 from src.sim.Data.HardwareParams import HardwareParams
 from src.sim.Devices.OpticFiber import OpticFiber
 from src.sim.MainDevices.ClassicChannel import ClassicChannel
@@ -21,9 +24,9 @@ def main():
         fiber_length=10
     )
 
-    fw = FileWriter('stat/statistics.json', [
-        'stat/alice.key',
-        'stat/bob.key',
+    fw = FileWriter(f'{os.getcwd()}/data/statistics.json', [
+        KeyManager(directory=f'{os.getcwd()}/data/alice'),
+        KeyManager(directory=f'{os.getcwd()}/data/bob')
     ])
 
     cc = ClassicChannel(ClassicChannel.MODE_LOCAL)
