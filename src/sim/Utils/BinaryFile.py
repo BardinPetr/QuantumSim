@@ -15,6 +15,9 @@ class BinaryFile:
 
         self.write_memory = np.array([], dtype='bool')
 
+        if not os.path.isfile(self.path):
+            open(self.path, 'wb').close()
+
     def read(self, start: int, end: int):
         start_byte = floor(start / 8)
         end_byte = ceil(end / 8)

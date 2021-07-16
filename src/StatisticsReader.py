@@ -44,21 +44,15 @@ if __name__ == '__main__':
 
     sr.parse()
 
-    emitted_waves_count = sr.get_parameter_values('emitted_waves_count')
-    received_waves_count = sr.get_parameter_values('key_length')
+    practical_values = sr.get_parameter_values('qber', -100)
 
-    q = received_waves_count / emitted_waves_count
-    laser_freq = 1 / sr.data['params'][0]['laser_period']
-
-    practical_values = q * laser_freq
-
-    theoretical_values = sr.get_theoretical_data(0)
+    theoretical_values = sr.get_theoretical_data(0, -100)
 
     mean = signal.filtfilt(*signal.ellip(11, 0.07, 50, 0.09), practical_values)
 
     fig, axs = plt.subplots(2, sharex='col')
 
-    fig.suptitle('R(sift)')
+    fig.suptitle('QBER')
 
     axs[0].plot(theoretical_values, color='red', linestyle='dashed')
     axs[0].plot(practical_values, color='blue')

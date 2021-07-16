@@ -1,5 +1,4 @@
 from src.Crypto import Crypto
-from src.KeyManager import KeyManager
 from src.sim.MainDevices.Eventable import Eventable
 
 
@@ -20,8 +19,10 @@ class ClassicChannel(Eventable):
             raise NotImplementedError()
 
     def send(self, x: bytes):
-        self._send(self.crypto.encrypt(x, psk=True))
+        self._send(x)
+        # self._send(self.crypto.encrypt(x, psk=True))
 
     def _send(self, x: bytes):
         if self.mode == self.MODE_LOCAL:
-            self.emit(self.EVENT_ON_RECV, self.crypto.decrypt(x, psk=True))
+            # self.emit(self.EVENT_ON_RECV, self.crypto.decrypt(x, psk=True))
+            self.emit(self.EVENT_ON_RECV, x)

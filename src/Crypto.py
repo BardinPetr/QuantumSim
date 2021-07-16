@@ -22,7 +22,9 @@ class Crypto:
         return data.tobytes()
 
     def encrypt(self, data: Union[NDArray, list, tuple, bytes, bytearray], psk=False):
-        return self._postprocess(self._preprocess(data) ^ self.km.get(len(data), bits=False, psk=psk))
+        key = self.km.get(len(data), bits=False, psk=psk)
+        print("@", key)
+        return self._postprocess(self._preprocess(data) ^ key)
 
     def decrypt(self, data: Union[NDArray, list, tuple, bytes, bytearray], psk=False):
         return self.encrypt(data, psk)

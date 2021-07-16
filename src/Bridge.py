@@ -30,7 +30,7 @@ class Bridge(Eventable):
     HEADER_CLASSIC = b'classic_header'
 
     EVENT_SOCKET_INCOMING = 's_inc'
-    MTU = 1500
+    MTU = 3000
 
     def __init__(self,
                  crypto: Crypto,
@@ -126,6 +126,8 @@ class Bridge(Eventable):
             self._process_incoming_packets()
             self._process_outgoing_packets()
 
+            sleep(10e-3)
+
     def _process_incoming_packets(self):
         if len(self.read_deque) == 0:
             return
@@ -171,11 +173,12 @@ class Bridge(Eventable):
             return
 
         if header == Bridge.HEADER_CRYPT:
-            if self.crypto.km.available() < len(data):
+            if self.crypto.km.available() < len(data) * 8:
+                print("FAILED", self.crypto.km.available(), len(data) * 8)
                 return
 
             if self.send_lock == Bridge.LOCK_FLAG_IDLE:
-                self.send_data(ip, Bridge.HEADER_CTRL, bytes([0, *len(data).to_bytes(4, 'big')]))
+                self.send_data(ip, Bridge.HEADER_CTRL, bytes([Bridge.LOCK_CTRL_MSG_REQUEST]))
                 return
             elif self.send_lock in [Bridge.LOCK_FLAG_SENT, Bridge.LOCK_FLAG_REJECTED]:
                 return
@@ -187,6 +190,7 @@ class Bridge(Eventable):
             self.send_lock = Bridge.LOCK_FLAG_SENT
 
         try:
+            # print(f"SENDING packet from {ip} with data: {header} {data}")
             conn = self.connections[self.dig(ip)]
             conn.send(header + data)
         except:

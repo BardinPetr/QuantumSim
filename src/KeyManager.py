@@ -16,7 +16,7 @@ class KeyManager(Eventable):
     PSK_PATH: str = 'psk'
     CTRL_PATH = 'ctrl'
 
-    KEY_FRAME_SIZE = 1
+    KEY_FRAME_SIZE = 1000
     KEY_BLOCK_SIZE = 1000
     PSK_SIZE = 5000
 

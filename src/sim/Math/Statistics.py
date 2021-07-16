@@ -52,7 +52,7 @@ class Statistics(Eventable):
         return np.sum(self.alice_key != self.bob_key) / len(self.alice_key)
 
     @staticmethod
-    def log_statistics(data: StatisticsData, params: HardwareParams):
+    def log_statistics(data: StatisticsData):
         print()
         print('Generated key length:', data.key_length)
 

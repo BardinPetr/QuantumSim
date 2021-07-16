@@ -40,7 +40,8 @@ def simulate_bb84(params: HardwareParams, f_ec: float = 1.2):
     r_raw = params.laser_freq * Q / (1 + params.dt * params.laser_freq * Q)
     r_sift = r_raw / 2
 
-    Q1 = Q - 1 + (math.e ** (-params.mu * params.eff) - params.eff * math.e ** (-params.mu)) / (1 - params.eff)
+    Q1 = Q - 1 + (math.e ** (-params.mu * params.eff) - params.eff * math.e ** (-params.mu)) / max(1 - params.eff, 10e-8)
+
     E1 = qber * Q / Q1
 
     r_sec = r_sift * (Q1 / Q * (1 - h(E1)) - f_ec * h(qber))
