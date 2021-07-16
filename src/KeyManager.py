@@ -3,23 +3,30 @@ import os
 import numpy as np
 from numpy.typing import NDArray
 
+from src.sim.MainDevices.Eventable import Eventable
 from src.sim.Utils.BinaryFile import BinaryFile
 
 
-class KeyManager:
+class KeyManager(Eventable):
+    EVENT_NOT_ENOUGH_PSK = 'enep'
+    EVENT_UPDATED_KEY = 'key_updated'
+
     KEY_PATH: str = 'key'
     TEMP_KEY_PATH: str = 'temp_key'
     PSK_PATH: str = 'psk'
     CTRL_PATH = 'ctrl'
 
-    KEY_FRAME_SIZE = 50
+    KEY_FRAME_SIZE = 1
     KEY_BLOCK_SIZE = 1000
+    PSK_SIZE = 5000
 
     def __init__(self, directory: str):
+        super().__init__()
         # files
         self.key_file = BinaryFile(path=os.path.join(directory, self.KEY_PATH))
         self.temp_key_file = BinaryFile(path=os.path.join(directory, self.TEMP_KEY_PATH))
-        self.psk_path = os.path.join(directory, self.PSK_PATH)
+        self.psk_file = BinaryFile(path=os.path.join(directory, self.PSK_PATH))
+        # self.psk_path = os.path.join(directory, self.PSK_PATH)
         self.ctrl_path = os.path.join(directory, self.CTRL_PATH)
 
         if not os.path.isfile(self.ctrl_path) or os.path.getsize(self.ctrl_path) == 0:
@@ -40,11 +47,17 @@ class KeyManager:
     def clear(self):
         self.key_file.clear()
 
-    def get(self, length: int, bits=True):
+    def get(self, length: int, bits=True, psk=False):
         length = length if bits else length * 8
-        key = self.key_file.read(self.cur_pos, self.cur_pos + length - 1)
 
-        self.cur_pos += length
+        if psk:
+            key = self.psk_file.read(self.cur_psk_pos, self.cur_psk_pos + length - 1)
+            self.cur_psk_pos += length
+            self.check_psk()
+        else:
+            key = self.key_file.read(self.cur_pos, self.cur_pos + length - 1)
+            self.cur_pos += length
+
         self.save_cur_pos()
 
         return key if bits else np.packbits(key)
@@ -55,9 +68,20 @@ class KeyManager:
         if len(self.temp_key_file) > self.KEY_FRAME_SIZE:
             self.key_file.append(self.postprocess_key(self.temp_key_file.read_all()))
             self.temp_key_file.clear()
+            self.emit(KeyManager.EVENT_UPDATED_KEY)
+
+    def available(self, psk=False):
+        return len(self.psk_file if psk else self.key_file) - (self.cur_psk_pos if psk else self.cur_pos)
 
     def postprocess_key(self, data):
         return data
+
+    def update_psk(self, length):
+        self.psk_file.append(self.get(length))
+
+    def check_psk(self):
+        if len(self.psk_file) <= self.cur_psk_pos:
+            self.emit(KeyManager.EVENT_NOT_ENOUGH_PSK, KeyManager.PSK_SIZE)
 
 
 if __name__ == '__main__':

@@ -1,24 +1,20 @@
 import json
 
+import numpy as np
+import pandas as pd
 from matplotlib import pyplot as plt
+from scipy import signal
+from scipy.interpolate import make_interp_spline
+from scipy.signal import medfilt, savgol_filter, wiener, symiirorder1, decimate, filtfilt
 
-
-def flatten_dict(d, parent_key='', sep='.'):
-    items = []
-    for k, v in d.items():
-        new_key = parent_key + sep + k if parent_key else k
-        if isinstance(v, dict):
-            items.extend(flatten_dict(v, new_key, sep=sep).items())
-        else:
-            items.append((new_key, v))
-
-    return dict(items)
+from src.sim.Data.HardwareParams import HardwareParams
+from src.sim.Math.QBERGen import simulate_bb84
 
 
 class StatisticsReader:
     def __init__(self, path_to_statistics: str):
         self.path = path_to_statistics
-        self.data = {}
+        self.data = None
 
     def get_statistics_file_content(self):
         with open(self.path, 'r') as f:
@@ -27,16 +23,20 @@ class StatisticsReader:
         return json.loads(content)
 
     def parse(self):
-        self.data = [flatten_dict(row, sep='.') for row in self.get_statistics_file_content()]
+        self.data = pd.DataFrame(self.get_statistics_file_content())
         return self.data
 
-    def get_parameter_values(self, parameter: str, limit: int = -1):
-        values = []
+    def get_parameter_values(self, parameter: str, limit: int = None):
+        return self.data[parameter][:(limit if limit else len(self.data))]
 
-        for i in self.data[:(limit if limit > 0 else len(self.data))]:
-            values.append(i[parameter])
+    def get_theoretical_data(self, parameter: int, limit: int = None):
+        params = self.data['params'][:(limit if limit else len(self.data))]
 
-        return values
+        return [simulate_bb84(HardwareParams(**i))[parameter] for i in params]
+
+
+def moving_average(x, w):
+    return np.convolve(x, np.ones(w), 'valid') / w
 
 
 if __name__ == '__main__':
@@ -44,10 +44,26 @@ if __name__ == '__main__':
 
     sr.parse()
 
-    print(sr.data)
+    emitted_waves_count = sr.get_parameter_values('emitted_waves_count')
+    received_waves_count = sr.get_parameter_values('key_length')
 
-    values = sr.get_parameter_values('qber')
+    q = received_waves_count / emitted_waves_count
+    laser_freq = 1 / sr.data['params'][0]['laser_period']
 
-    plot = plt.plot(values)
+    practical_values = q * laser_freq
+
+    theoretical_values = sr.get_theoretical_data(0)
+
+    mean = signal.filtfilt(*signal.ellip(11, 0.07, 50, 0.09), practical_values)
+
+    fig, axs = plt.subplots(2, sharex='col')
+
+    fig.suptitle('R(sift)')
+
+    axs[0].plot(theoretical_values, color='red', linestyle='dashed')
+    axs[0].plot(practical_values, color='blue')
+
+    axs[1].plot(theoretical_values, color='red', linestyle='dashed')
+    axs[1].plot(mean, color='blue')
 
     plt.show()

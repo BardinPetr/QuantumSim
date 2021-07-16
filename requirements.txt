@@ -5,3 +5,5 @@ dataclasses_json
 python-pytun
 pyroute2
 pyshark
+pandas
+scipy

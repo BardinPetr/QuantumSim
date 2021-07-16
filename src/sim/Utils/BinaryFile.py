@@ -5,6 +5,10 @@ import numpy as np
 from numpy.typing import NDArray
 
 
+class FileTooShort(Exception):
+    pass
+
+
 class BinaryFile:
     def __init__(self, path: str):
         self.path = path
@@ -14,6 +18,9 @@ class BinaryFile:
     def read(self, start: int, end: int):
         start_byte = floor(start / 8)
         end_byte = ceil(end / 8)
+
+        if end_byte * 8 > self.__len__():
+            raise FileTooShort()
 
         with open(self.path, 'rb') as f:
             f.seek(start_byte)
