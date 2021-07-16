@@ -1,3 +1,4 @@
+import time
 from dataclasses import dataclass
 
 from dataclasses_json import dataclass_json
@@ -12,7 +13,6 @@ class StatisticsData:
     qber: float
     received_waves_count: int
     emitted_waves_count: int
-
     key_length: int
 
     params: HardwareParams

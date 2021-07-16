@@ -1,6 +1,6 @@
 import os
 
-from src.FileWriter import FileWriter
+from src.StatWriter import StatWriter
 
 from src.KeyManager import KeyManager
 from src.sim.Data.HardwareParams import HardwareParams
@@ -16,16 +16,16 @@ def main():
     hp = HardwareParams(
         polarization=(1, 0),
         # laser_period=5000,
-        mu=0.5,
+        # mu=0.5,
         # delta_opt=0,
         # prob_opt=0,
         # pdc=10 ** -5,
         # eff=0.1,
         # dt=1000,
-        fiber_length=10
+        # fiber_length=10
     )
 
-    fw = FileWriter(f'{os.getcwd()}/data/statistics.json')
+    sw = StatWriter(f'{os.getcwd()}/data/statistics.json')
 
     km_alice = KeyManager(directory=f'{os.getcwd()}/data/alice')
     km_bob = KeyManager(directory=f'{os.getcwd()}/data/bob')
@@ -33,7 +33,7 @@ def main():
     cc = ClassicChannel(ClassicChannel.MODE_LOCAL)
 
     stat = Statistics(hp)
-    stat.subscribe(Statistics.EVENT_RESULT, fw.write)
+    stat.subscribe(Statistics.EVENT_RESULT, sw.write)
 
     alice = Alice(hp, classic_channel=cc, session_size=10 ** 4)
     alice.subscribe(EndpointDevice.EVENT_KEY_FINISHED, stat.alice_update)
