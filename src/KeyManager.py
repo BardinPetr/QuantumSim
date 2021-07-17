@@ -16,8 +16,8 @@ class KeyManager(Eventable):
     PSK_PATH: str = 'psk'
     CTRL_PATH = 'ctrl'
 
-    KEY_FRAME_SIZE = 1000
-    KEY_BLOCK_SIZE = 1000
+    KEY_FRAME_SIZE = 1024
+    KEY_BLOCK_SIZE = 1024
     PSK_SIZE = 5000
 
     def __init__(self, directory: str):
@@ -48,6 +48,7 @@ class KeyManager(Eventable):
         self.key_file.clear()
 
     def get(self, length: int, bits=True, psk=False):
+        # return np.zeros(length, dtype='uint8')
         length = length if bits else length * 8
 
         if psk:
@@ -66,9 +67,15 @@ class KeyManager(Eventable):
         self.temp_key_file.append(key)
 
         if len(self.temp_key_file) > self.KEY_FRAME_SIZE:
-            self.key_file.append(self.postprocess_key(self.temp_key_file.read_all()))
+            key_part = self.temp_key_file.read_all()
             self.temp_key_file.clear()
-            self.emit(KeyManager.EVENT_UPDATED_KEY)
+            for i in range(0, len(key_part), self.KEY_FRAME_SIZE):
+                if i + self.KEY_FRAME_SIZE <= len(key_part):
+                    self.key_file.append(self.postprocess_key(key_part[i:i + self.KEY_FRAME_SIZE]))
+                else:
+                    self.temp_key_file.append(key_part[i:])
+                    break
+        self.emit(KeyManager.EVENT_UPDATED_KEY)
 
     def available(self, psk=False):
         return len(self.psk_file if psk else self.key_file) - (self.cur_psk_pos if psk else self.cur_pos)

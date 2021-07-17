@@ -14,6 +14,7 @@ class Statistics(Eventable):
         super().__init__()
 
         self.params = params
+        self.total_key_length = 0
         self.clear()
 
     def clear(self):
@@ -34,6 +35,7 @@ class Statistics(Eventable):
                 self.received_waves_count,
                 self.emitted_waves_count,
                 len(self.alice_key),
+                self.total_key_length,
                 self.params
             )
 
@@ -42,6 +44,9 @@ class Statistics(Eventable):
 
     def alice_update(self, data):
         self.alice_key, self.emitted_waves_count = data
+
+        self.total_key_length += len(self.alice_key)
+
         self.check()
 
     def bob_update(self, data):
@@ -55,6 +60,7 @@ class Statistics(Eventable):
     def log_statistics(data: StatisticsData):
         print()
         print('Generated key length:', data.key_length)
+        print('Total key length:', data.total_key_length)
 
         print('Speed:', data.speed)
         print('QBER:', data.qber)

@@ -51,13 +51,15 @@ class BinaryFile:
 
     def read_all(self):
         with open(self.path, 'rb') as f:
-            byte_content = bytearray(f.readlines()[0])
+            byte_content = bytearray(f.read())
 
         return np.unpackbits(np.frombuffer(byte_content, dtype='uint8'))
 
     def clear(self):
-        if os.path.isfile(self.path):
-            os.unlink(self.path)
+        with open(self.path, 'w') as f:
+            f.write("")
+
+        self.write_memory = np.array([], dtype='bool')
 
     def __len__(self):
         return os.path.getsize(self.path) * 8

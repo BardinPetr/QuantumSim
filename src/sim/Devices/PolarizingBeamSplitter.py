@@ -8,7 +8,6 @@ from src.sim.Wave import Wave
 from src.utils.algebra import rot_mat
 
 
-# TODO: change this for waves
 class PolarizingBeamSplitter(Device):
     def __init__(self, angle: float, basis=BASIS_HV, angle_control_cb=None, name='Polarizing beam splitter'):
         super().__init__(name)
@@ -21,10 +20,10 @@ class PolarizingBeamSplitter(Device):
     def _get_basis(self, angle):
         return rot_mat(angle).dot(self.basis_base)
 
-    def process_full(self, photon: Wave) -> Union[Wave, None]:
-        basis = self._get_basis(self.angle_control_cb(photon.time))
-        state = photon.state.read(basis)
+    def process_full(self, wave: Wave) -> Union[Wave, None]:
+        basis = self._get_basis(self.angle_control_cb(wave.time))
+        state = wave.state.read(basis)
         if np.allclose(state, basis[0], rtol=10e-6):
-            return [photon, None]
+            return [wave, None]
 
-        return [None, photon]
+        return [None, wave]

@@ -14,6 +14,7 @@ class StatisticsData:
     received_waves_count: int
     emitted_waves_count: int
     key_length: int
+    total_key_length: int
 
     params: HardwareParams
 
