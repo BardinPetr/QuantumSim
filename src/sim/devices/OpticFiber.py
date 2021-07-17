@@ -2,10 +2,10 @@ from typing import Union
 
 import numpy as np
 
-from src.sim.MainDevices.Device import Device
+from src.sim.devices.Device import Device
 from src.sim.Wave import Wave
-from src.utils.algebra import rot_mat
-from src.utils.rand import rand_bin
+from src.math.algebra import rot_mat
+from src.math.rand import rand_bin
 
 
 class OpticFiber(Device):

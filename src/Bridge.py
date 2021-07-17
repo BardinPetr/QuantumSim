@@ -10,7 +10,7 @@ from pytun import TunTapDevice, IFF_TUN
 
 from src.Crypto import Crypto
 from src.KeyManager import KeyManager
-from src.sim.MainDevices.Eventable import Eventable
+from src.Eventable import Eventable
 
 
 class Bridge(Eventable):

@@ -1,6 +1,6 @@
 from typing import Union
 
-from src.sim.MainDevices.Eventable import Eventable
+from src.Eventable import Eventable
 from src.sim.Wave import *
 
 
@@ -8,6 +8,7 @@ class Device(Eventable):
     EVENT_IN = "wave_in"
     EVENT_OUT = "wave_out"
     EVENT_AFTER_FORWARD_LINK = "after_forward_link"
+    EVENT_AFTER_BACK_LINK = "after_back_link"
 
     def __init__(self, name="Basic Device"):
         super().__init__()
@@ -40,6 +41,7 @@ class Device(Eventable):
             self.outputs.append(i)
             if auto:
                 i.back_link(self, auto=False)
+
         self.emit(self.EVENT_AFTER_FORWARD_LINK)
 
     def back_link(self, *devs, auto=True):
@@ -47,6 +49,8 @@ class Device(Eventable):
             self.inputs.append(i)
             if auto:
                 i.forward_link(self, auto=False)
+
+        self.emit(self.EVENT_AFTER_BACK_LINK)
 
 
 if __name__ == "__main__":

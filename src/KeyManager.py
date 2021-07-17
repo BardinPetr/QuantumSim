@@ -3,8 +3,8 @@ import os
 import numpy as np
 from numpy.typing import NDArray
 
-from src.sim.MainDevices.Eventable import Eventable
-from src.sim.Utils.BinaryFile import BinaryFile
+from src.Eventable import Eventable
+from src.utils.BinaryFile import BinaryFile
 
 
 class KeyManager(Eventable):
@@ -22,7 +22,7 @@ class KeyManager(Eventable):
 
     def __init__(self, directory: str):
         super().__init__()
-        # files
+
         self.key_file = BinaryFile(path=os.path.join(directory, self.KEY_PATH))
         self.temp_key_file = BinaryFile(path=os.path.join(directory, self.TEMP_KEY_PATH))
         self.psk_file = BinaryFile(path=os.path.join(directory, self.PSK_PATH))
@@ -33,6 +33,8 @@ class KeyManager(Eventable):
             self.save_cur_pos(0, 0)
 
         self.cur_pos, self.cur_psk_pos = self.load_cur_pos()
+
+        self.test_memory = np.array([], dtype='bool')
 
     def load_cur_pos(self):
         with open(self.ctrl_path, 'r+') as f:
@@ -66,7 +68,9 @@ class KeyManager(Eventable):
         self.temp_key_file.append(key)
 
         if len(self.temp_key_file) > self.KEY_FRAME_SIZE:
-            self.key_file.append(self.postprocess_key(self.temp_key_file.read_all()))
+            self.key_file.append(
+                self.postprocess_key(self.temp_key_file.read_all())
+            )
             self.temp_key_file.clear()
             self.emit(KeyManager.EVENT_UPDATED_KEY)
 

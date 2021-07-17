@@ -1,9 +1,9 @@
 from typing import Union
 
-from src.sim.MainDevices.Device import Device
+from src.sim.devices.Device import Device
 from src.sim.QuantumState import QuantumState
 from src.sim.Wave import Wave
-from src.utils.rand import rand_bin
+from src.math.rand import rand_bin
 
 
 class Detector(Device):

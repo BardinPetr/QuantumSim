@@ -1,4 +1,4 @@
-from src.utils.rand import rand_bin
+from src.math.rand import rand_bin
 
 
 class User:

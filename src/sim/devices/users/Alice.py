@@ -1,45 +1,53 @@
 import numpy as np
 
-from src.sim.Data.HardwareParams import HardwareParams
-from src.sim.Devices.Clock import Clock
-from src.sim.Devices.HalfWavePlate import HalfWavePlate
-from src.sim.Devices.Laser import Laser
-from src.sim.MainDevices.ClassicChannel import ClassicChannel
-from src.sim.MainDevices.EndpointDevice import EndpointDevice
-from src.sim.Utils.BB84ClassicChannelData import BB84ClassicChannelData
-from src.utils.rand import rand_bin
+from src.KeyManager import KeyManager
+from src.math.rand import rand_bin
+from src.sim.ClassicChannel import ClassicChannel
+from src.sim.Clock import Clock
+from src.sim.data.AliceHardwareParams import AliceHardwareParams
+from src.sim.data.BB84ClassicChannelData import BB84ClassicChannelData
+from src.sim.devices.HalfWavePlate import HalfWavePlate
+from src.sim.devices.Laser import Laser
+from src.sim.devices.users.EndpointDevice import EndpointDevice
 
 
 class Alice(EndpointDevice):
     def __init__(self,
-                 params: HardwareParams,
+                 mac_address: str,
+                 params: AliceHardwareParams,
                  classic_channel: ClassicChannel,
+                 key_manager: KeyManager,
                  session_size: int = 10 ** 5,
                  name: str = "Alice"):
-        super().__init__(params, name)
+        super().__init__(mac_address, name)
 
+        self.hard_params = params
         self.clock = Clock(params.laser_period)
 
         self.base_key = []
 
         self.session_size = session_size
+
         self.classic_channel = classic_channel
         self.classic_channel.subscribe(ClassicChannel.EVENT_ON_RECV, self.on_classic_recv)
+
+        self.subscribe(Alice.EVENT_KEY_FINISHED, key_manager.append)
 
         self.gen_optic_scheme()
 
     def on_classic_recv(self, data):
-        data: BB84ClassicChannelData = BB84ClassicChannelData.from_json(data)
-
-        if data.message_type == 0:
+        mac_address, data = data
+        if mac_address != self.mac_address:
             return
+
+        data: BB84ClassicChannelData = BB84ClassicChannelData.from_json(data)
 
         key = np.array(self.base_key)[data.save_ids]
         self.save_key(key)
 
     def save_key(self, key):
-        self.emit(EndpointDevice.EVENT_KEY_FINISHED, (key, self.session_size))
-        # print("ALICE GOT KEY:", *key[:25].tolist(), sep="\t")
+        self.emit(EndpointDevice.EVENT_KEY_FINISHED, key)
+        print('alice', *key[:25], sep='\t')
 
     def start(self, progress_bar=True):
         while True:
@@ -50,9 +58,11 @@ class Alice(EndpointDevice):
             self.check_bases()
 
     def check_bases(self):
+        print('alice data len', len(self.base_key))
+
         self.classic_channel.send(
+            self.outputs[0].mac_address,
             BB84ClassicChannelData(
-                message_type=0,
                 bases=self.bases
             ).to_json().encode('utf-8')
         )
@@ -68,4 +78,3 @@ class Alice(EndpointDevice):
         self.laser.forward_link(self.hwp)
 
         self.hwp.forward_link(self)
-

@@ -4,11 +4,13 @@ import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 from scipy import signal
-from scipy.interpolate import make_interp_spline
-from scipy.signal import medfilt, savgol_filter, wiener, symiirorder1, decimate, filtfilt
 
-from src.sim.Data.HardwareParams import HardwareParams
-from src.sim.Math.QBERGen import simulate_bb84
+from src.sim.data.HardwareParams import HardwareParams
+from src.math.theoretical_data_generator import simulate_bb84
+
+"""
+Read statistics from json file and parse it
+"""
 
 
 class StatisticsReader:
@@ -40,24 +42,28 @@ def moving_average(x, w):
 
 
 if __name__ == '__main__':
-    sr = StatisticsReader(path_to_statistics='../data/statistics.json')
+    sr = StatisticsReader(path_to_statistics='../../data/statistics.json')
 
     sr.parse()
 
     practical_values = sr.get_parameter_values('qber', -100)
 
-    theoretical_values = sr.get_theoretical_data(0, -100)
+    theoretical_values = sr.get_theoretical_data(1, -100)
 
     mean = signal.filtfilt(*signal.ellip(11, 0.07, 50, 0.09), practical_values)
 
     fig, axs = plt.subplots(2, sharex='col')
 
-    fig.suptitle('QBER')
+    fig.set_figwidth(15)
+    fig.set_figheight(10)
 
-    axs[0].plot(theoretical_values, color='red', linestyle='dashed')
-    axs[0].plot(practical_values, color='blue')
+    axs[0].plot(practical_values, color='blue', label='Практическое значение')
+    axs[0].plot(theoretical_values, color='red', linestyle='dashed', label='Теоретическое значение')
 
-    axs[1].plot(theoretical_values, color='red', linestyle='dashed')
-    axs[1].plot(mean, color='blue')
+    axs[1].plot(mean[5:], color='blue', label='Усреднённое практическое значение')
+    axs[1].plot(theoretical_values, color='red', linestyle='dashed', label='Теоретическое значение')
+
+    axs[0].legend(loc="upper right", prop={'size': 15})
+    axs[1].legend(loc="upper right", prop={'size': 15})
 
     plt.show()

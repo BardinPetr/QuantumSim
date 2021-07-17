@@ -1,6 +1,6 @@
 from time import sleep
 
-from src.sim.MainDevices.Eventable import Eventable
+from src.Eventable import Eventable
 
 
 class Clock(Eventable):

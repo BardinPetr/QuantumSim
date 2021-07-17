@@ -1,18 +1,17 @@
 import logging
-import os
 
 import psutil
 import ray
 from ray.util.queue import Queue
 
-from src.sim.Data.HardwareParams import HardwareParams
-from src.sim.Devices.OpticFiber import OpticFiber
-from src.sim.MainDevices.ClassicChannel import ClassicChannel
-from src.sim.MainDevices.EndpointDevice import EndpointDevice
-from src.sim.MainDevices.Users.Alice import Alice
-from src.sim.MainDevices.Users.Bob import Bob
+from src.sim.data.HardwareParams import HardwareParams
+from src.sim.devices.OpticFiber import OpticFiber
+from src.sim.ClassicChannel import ClassicChannel
+from src.sim.devices.users.EndpointDevice import EndpointDevice
+from src.sim.devices.users.Alice import Alice
+from src.sim.devices.users.Bob import Bob
 from src.sim.Math.StatAggregator import StatAggregator
-from src.sim.Math.Statistics import Statistics
+from src.statistics.Statistics import Statistics
 
 logging.basicConfig(filename='log.log', encoding='utf-8', level=logging.DEBUG)
 
@@ -76,7 +75,6 @@ def main():
     num_cpus = 3
     queue = Queue(maxsize=100)
 
-    import numpy
     # os.system("taskset -p 0xff %d" % os.getpid())
 
     ray.get([proc.remote((0, queue)) for i in range(num_cpus - 1)] + [proc.remote((1, queue))])

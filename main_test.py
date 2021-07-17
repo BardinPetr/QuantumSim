@@ -1,18 +1,14 @@
 import os
 import threading
-from time import sleep
-
-from src.Bridge import Bridge
-from src.Crypto import Crypto
 from src.KeyManager import KeyManager
-from src.StatWriter import StatWriter
-from src.sim.Data.HardwareParams import HardwareParams
-from src.sim.Devices.OpticFiber import OpticFiber
-from src.sim.MainDevices.ClassicChannel import ClassicChannel
-from src.sim.MainDevices.EndpointDevice import EndpointDevice
-from src.sim.MainDevices.Users.Alice import Alice
-from src.sim.MainDevices.Users.Bob import Bob
-from src.sim.Math.Statistics import Statistics
+from src.statistics.StatWriter import StatWriter
+from src.sim.data.HardwareParams import HardwareParams
+from src.sim.devices.OpticFiber import OpticFiber
+from src.sim.ClassicChannel import ClassicChannel
+from src.sim.devices.users.EndpointDevice import EndpointDevice
+from src.sim.devices.users.Alice import Alice
+from src.sim.devices.users.Bob import Bob
+from src.statistics.Statistics import Statistics
 
 
 def main():
@@ -31,18 +27,10 @@ def main():
     sw = StatWriter(f'{os.getcwd()}/data/statistics.json')
 
     km_alice = KeyManager(directory=f'{os.getcwd()}/data/alice')
-    alice_c = Crypto(km_alice)
-    alice_b = Bridge(alice_c, '0.0.0.0', '10.10.10.1', in_port=51001)
-    threading.Thread(target=alice_b.run, daemon=True).run()
-
     km_bob = KeyManager(directory=f'{os.getcwd()}/data/bob')
-    bob_c = Crypto(km_bob)
-    bob_b = Bridge(bob_c, '127.0.0.1', '10.10.10.2', in_port=51002)
-    threading.Thread(target=bob_b.run, daemon=True).run()
-
-    bob_b.connect('0.0.0.0', 51001)
 
     cc = ClassicChannel(ClassicChannel.MODE_LOCAL)
+    cc.subscribe(ClassicChannel.EVENT_ON_RECV, print)
 
     stat = Statistics(hp)
     stat.subscribe(Statistics.EVENT_RESULT, sw.write)
@@ -61,19 +49,6 @@ def main():
 
     of.forward_link(bob)
 
-    def send():
-        sleep(5)
-
-        def recv(x):
-            print("$" * 20)
-            with open('res.bmp', 'wb') as f:
-                f.write(x)
-
-        alice_b.subscribe(Bridge.EVENT_SOCKET_INCOMING, recv)
-
-        bob_b.send_crypt('0.0.0.0', open('poem.txt', 'rb').read())
-
-    threading.Thread(target=send, daemon=True).run()
     threading.Thread(target=lambda: alice.start(progress_bar=False), daemon=True).run()
 
     while True:

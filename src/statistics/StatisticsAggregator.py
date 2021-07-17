@@ -2,12 +2,16 @@ from time import time
 
 import numpy as np
 
-from src.sim.Data.HardwareParams import HardwareParams
-from src.sim.MainDevices.Eventable import Eventable
-from src.sim.Utils.StatisticsData import StatisticsData
+from src.sim.data.HardwareParams import HardwareParams
+from src.Eventable import Eventable
+from src.statistics.StatisticsData import StatisticsData
+
+"""
+Collect statistics and put it into StatisticsData class
+"""
 
 
-class Statistics(Eventable):
+class StatisticsAggregator(Eventable):
     EVENT_RESULT = 'event_result'
 
     def __init__(self, params: HardwareParams):

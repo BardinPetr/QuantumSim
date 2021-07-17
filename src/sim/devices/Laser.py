@@ -2,8 +2,8 @@ from typing import Tuple, Union
 
 from tqdm import tqdm
 
-from src.sim.Devices.Clock import Clock
-from src.sim.MainDevices.Device import Device
+from src.sim.Clock import Clock
+from src.sim.devices.Device import Device
 from src.sim.QuantumState import QuantumState
 from src.sim.Wave import Wave
 

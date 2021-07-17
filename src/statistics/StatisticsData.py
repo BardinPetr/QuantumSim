@@ -1,9 +1,12 @@
-import time
 from dataclasses import dataclass
 
 from dataclasses_json import dataclass_json
 
-from src.sim.Data.HardwareParams import HardwareParams
+from src.sim.data.HardwareParams import HardwareParams
+
+"""
+Class for storing statistics data
+"""
 
 
 @dataclass_json

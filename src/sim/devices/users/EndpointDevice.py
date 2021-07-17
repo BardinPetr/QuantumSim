@@ -1,15 +1,14 @@
-from src.sim.Data.HardwareParams import HardwareParams
-from src.sim.MainDevices.Device import Device
-from src.utils.rand import rand_bin
+from src.sim.devices.Device import Device
+from src.math.rand import rand_bin
 
 
 class EndpointDevice(Device):
     EVENT_KEY_FINISHED = 'key_finished'
 
-    def __init__(self, params: HardwareParams, name="Basic Device"):
+    def __init__(self, mac_address: str, name="Basic Device"):
         super().__init__(name)
-        self.hard_params = params
         self.bases = []
+        self.mac_address = mac_address
 
     def choose_basis(self):
         basis = 0.5 if rand_bin() else 0

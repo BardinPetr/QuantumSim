@@ -1,6 +1,6 @@
 from typing import Union
 
-from src.sim.MainDevices.Device import Device
+from src.sim.devices.Device import Device
 from src.sim.Wave import Wave
 
 

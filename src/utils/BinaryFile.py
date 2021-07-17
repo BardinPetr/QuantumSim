@@ -51,26 +51,27 @@ class BinaryFile:
 
     def read_all(self):
         with open(self.path, 'rb') as f:
-            byte_content = bytearray(f.readlines()[0])
+            byte_content = bytearray(f.read())
 
         return np.unpackbits(np.frombuffer(byte_content, dtype='uint8'))
 
     def clear(self):
         if os.path.isfile(self.path):
-            os.unlink(self.path)
+            os.remove(self.path)
+            self.write_memory = np.array([], dtype='bool')
 
     def __len__(self):
         return os.path.getsize(self.path) * 8
 
 
 if __name__ == "__main__":
-    file = BinaryFile(path='d:/Programs/PycharmProjects/QuantumSim/data/test.txt')
+    key_file = BinaryFile(path='d:/Programs/PycharmProjects/QuantumSim/data/test1.txt')
+    temp_key_file = BinaryFile(path='/data/test2.txt')
 
-    file.clear()
+    key_file.clear()
+    temp_key_file.clear()
 
-    file.append(np.array([True, True, False, True]))
-    file.append(np.array([True, True, False, True]))
-    file.append(np.array([True, True, False, True]))
-    file.append(np.array([True, True, False, True]))
+    temp_key_file.append([True, False, False, True, True, False])
+    temp_key_file.append([True, False, False, True, True, False])
 
-    print(file.read(4, 5))
+    print(temp_key_file.read_all())

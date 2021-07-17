@@ -5,14 +5,14 @@ from time import sleep
 from src.Bridge import Bridge
 from src.Crypto import Crypto
 from src.KeyManager import KeyManager
-from src.StatWriter import StatWriter
-from src.sim.Data.HardwareParams import HardwareParams
-from src.sim.Devices.OpticFiber import OpticFiber
-from src.sim.MainDevices.ClassicChannel import ClassicChannel
-from src.sim.MainDevices.EndpointDevice import EndpointDevice
-from src.sim.MainDevices.Users.Alice import Alice
-from src.sim.MainDevices.Users.Bob import Bob
-from src.sim.Math.Statistics import Statistics
+from src.statistics.StatisticsWriter import StatisticsWriter
+from src.sim.data.HardwareParams import HardwareParams
+from src.sim.devices.OpticFiber import OpticFiber
+from src.sim.ClassicChannel import ClassicChannel
+from src.sim.devices.users.EndpointDevice import EndpointDevice
+from src.sim.devices.users.Alice import Alice
+from src.sim.devices.users.Bob import Bob
+from src.statistics.StatisticsAggregator import StatisticsAggregator
 
 
 def main():
@@ -28,7 +28,7 @@ def main():
         # fiber_length=0
     )
 
-    sw = StatWriter(f'{os.getcwd()}/data/statistics.json')
+    sw = StatisticsWriter(f'{os.getcwd()}/data/statistics.json')
 
     km_alice = KeyManager(directory=f'{os.getcwd()}/data/alice')
     alice_c = Crypto(km_alice)
@@ -44,9 +44,9 @@ def main():
 
     cc = ClassicChannel(ClassicChannel.MODE_LOCAL)
 
-    stat = Statistics(hp)
-    stat.subscribe(Statistics.EVENT_RESULT, sw.write)
-    stat.subscribe(Statistics.EVENT_RESULT, stat.log_statistics)
+    stat = StatisticsAggregator(hp)
+    stat.subscribe(StatisticsAggregator.EVENT_RESULT, sw.write)
+    stat.subscribe(StatisticsAggregator.EVENT_RESULT, stat.log_statistics)
 
     alice = Alice(hp, classic_channel=cc, session_size=10 ** 4)
     alice.subscribe(EndpointDevice.EVENT_KEY_FINISHED, stat.alice_update)
@@ -71,7 +71,7 @@ def main():
 
         alice_b.subscribe(Bridge.EVENT_SOCKET_INCOMING, recv)
 
-        bob_b.send_crypt('0.0.0.0', open('cat.bmp', 'rb').read())
+        bob_b.send_crypt('0.0.0.0', open('poem.txt', 'rb').read())
 
     threading.Thread(target=send, daemon=True).run()
     threading.Thread(target=lambda: alice.start(progress_bar=False), daemon=True).run()

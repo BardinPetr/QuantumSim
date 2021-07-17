@@ -1,7 +1,7 @@
-from src.sim.MainDevices.Device import Device
+from src.sim.devices.Device import Device
 from src.sim.Wave import Wave
 from src.sim.QuantumState import *
-from src.utils.algebra import rot_mat
+from src.math.algebra import rot_mat
 
 
 class HalfWavePlate(Device):

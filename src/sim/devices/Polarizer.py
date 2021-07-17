@@ -1,16 +1,14 @@
-from typing import Union
-
-import numpy as np
-
-from src.sim.MainDevices.Device import Device
-from src.sim.QuantumState import BASIS_HV
+from src.sim.devices.Device import Device
+from src.sim.QuantumState import *
 from src.sim.Wave import Wave
-from src.utils.algebra import rot_mat
+from src.math.algebra import rot_mat
 
 
 # TODO: change this for waves
-class PolarizingBeamSplitter(Device):
-    def __init__(self, angle: float, basis=BASIS_HV, angle_control_cb=None, name='Polarizing beam splitter'):
+class Polarizer(Device):
+    def __init__(self, angle: float, basis=BASIS_HV,
+                 angle_control_cb=None,
+                 name='Linear polarizer'):
         super().__init__(name)
 
         self.basis_base = basis
@@ -25,6 +23,6 @@ class PolarizingBeamSplitter(Device):
         basis = self._get_basis(self.angle_control_cb(photon.time))
         state = photon.state.read(basis)
         if np.allclose(state, basis[0], rtol=10e-6):
-            return [photon, None]
-
-        return [None, photon]
+            return photon
+        else:
+            return None
