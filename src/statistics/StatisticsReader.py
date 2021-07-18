@@ -37,10 +37,6 @@ class StatisticsReader:
         return [simulate_bb84(HardwareParams(**i))[parameter] for i in params]
 
 
-def moving_average(x, w):
-    return np.convolve(x, np.ones(w), 'valid') / w
-
-
 if __name__ == '__main__':
     sr = StatisticsReader(path_to_statistics='../../data/statistics.json')
 

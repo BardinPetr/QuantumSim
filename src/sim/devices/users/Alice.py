@@ -1,6 +1,6 @@
 import numpy as np
 
-from src.KeyManager import KeyManager
+from src.crypto.KeyManager import KeyManager
 from src.math.rand import rand_bin
 from src.sim.ClassicChannel import ClassicChannel
 from src.sim.Clock import Clock
@@ -58,8 +58,6 @@ class Alice(EndpointDevice):
             self.check_bases()
 
     def check_bases(self):
-        print('alice data len', len(self.base_key))
-
         self.classic_channel.send(
             self.outputs[0].mac_address,
             BB84ClassicChannelData(

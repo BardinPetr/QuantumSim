@@ -1,4 +1,4 @@
-from src.Crypto import Crypto
+from src.crypto.Crypto import Crypto
 from src.Eventable import Eventable
 
 

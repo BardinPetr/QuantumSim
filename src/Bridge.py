@@ -8,8 +8,8 @@ import pyshark
 import pytun
 from pytun import TunTapDevice, IFF_TUN
 
-from src.Crypto import Crypto
-from src.KeyManager import KeyManager
+from src.crypto.Crypto import Crypto
+from src.crypto.KeyManager import KeyManager
 from src.Eventable import Eventable
 
 

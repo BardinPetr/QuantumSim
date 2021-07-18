@@ -10,6 +10,8 @@ class EndpointDevice(Device):
         self.bases = []
         self.mac_address = mac_address
 
+        self.current_connection: EndpointDevice = None
+
     def choose_basis(self):
         basis = 0.5 if rand_bin() else 0
         self.bases.append(bool(basis))

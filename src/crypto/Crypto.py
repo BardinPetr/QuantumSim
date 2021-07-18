@@ -3,7 +3,7 @@ from typing import Union
 import numpy as np
 from numpy.typing import NDArray
 
-from src.KeyManager import KeyManager
+from src.crypto.KeyManager import KeyManager
 
 
 class Crypto:

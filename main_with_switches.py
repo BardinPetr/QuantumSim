@@ -1,7 +1,7 @@
 import os
 import threading
 
-from src.KeyManager import KeyManager
+from src.crypto.KeyManager import KeyManager
 from src.sim.ClassicChannel import ClassicChannel
 from src.sim.data.AliceHardwareParams import AliceHardwareParams
 from src.sim.data.BobHardwareParams import BobHardwareParams

@@ -1,6 +1,6 @@
 import os
 import threading
-from src.KeyManager import KeyManager
+from src.crypto.KeyManager import KeyManager
 from src.statistics.StatWriter import StatWriter
 from src.sim.data.HardwareParams import HardwareParams
 from src.sim.devices.OpticFiber import OpticFiber

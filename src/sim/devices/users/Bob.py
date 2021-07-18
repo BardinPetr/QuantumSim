@@ -3,7 +3,7 @@ import math
 import numpy as np
 from numpy.typing import NDArray
 
-from src.KeyManager import KeyManager
+from src.crypto.KeyManager import KeyManager
 from src.sim.ClassicChannel import ClassicChannel
 from src.sim.Wave import Wave
 from src.sim.data.BB84ClassicChannelData import BB84ClassicChannelData
@@ -51,6 +51,18 @@ class Bob(EndpointDevice):
             self.current_connection = self.inputs[0].mac_address
             self.last_wave_time = -self.connections_laser_periods[self.current_connection]
 
+    def connect_to(self, mac_address: str):
+        for inp in self.inputs:
+            if inp.mac_address == mac_address:
+                self.current_connection = mac_address
+
+                
+
+                self.reset()
+                break
+        else:
+            raise Exception(f'There is no connection with mac address {mac_address}')
+
     def on_classic_recv(self, data):
         mac_address, data = data
         if mac_address != self.mac_address:
@@ -59,8 +71,6 @@ class Bob(EndpointDevice):
         data: BB84ClassicChannelData = BB84ClassicChannelData.from_json(data.decode())
 
         self.fix_photon_statistics(len(data.bases) * self.connections_laser_periods[self.current_connection])
-
-        print(len(self.base_key))
 
         alice_bases = np.array(data.bases, dtype='bool')
         bob_bases = np.array(self.bases, dtype='bool')
@@ -79,16 +89,19 @@ class Bob(EndpointDevice):
             ).to_json().encode('utf-8')
         )
 
+        self.reset()
+
+    def save_key(self, key):
+        self.emit(EndpointDevice.EVENT_KEY_FINISHED, key)
+        print('bob  ', *key[:25], sep='\t')
+
+    def reset(self):
         self.bases = []
         self.base_key = []
 
         self.last_wave_time = -self.connections_laser_periods[self.current_connection]
 
         self.detector.reset()
-
-    def save_key(self, key):
-        self.emit(EndpointDevice.EVENT_KEY_FINISHED, key)
-        print('bob  ', *key[:25], sep='\t')
 
     def gen_optic_scheme(self):
         self.hwp = HalfWavePlate(angle_control_cb=lambda _: -np.pi * self.choose_basis() / 4)
