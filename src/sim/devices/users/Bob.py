@@ -15,12 +15,11 @@ from src.sim.devices.users.EndpointDevice import EndpointDevice
 
 class Bob(EndpointDevice):
     def __init__(self,
-                 mac_address: str,
                  params: BobHardwareParams,
                  classic_channel: ClassicChannel,
                  key_manager: KeyManager,
                  name: str = "Bob"):
-        super().__init__(mac_address, name)
+        super().__init__(name)
 
         self.hard_params = params
 
@@ -124,6 +123,9 @@ class Bob(EndpointDevice):
             self.base_key += [2] * missed_count
 
     def on_detection(self, wave: Wave):
+        if wave.history[-1] != self.inputs[self.current_connection].uuid:
+            return
+
         self.fix_photon_statistics(wave.time)
 
         state = wave.state.read(self.hard_params.read_basis)

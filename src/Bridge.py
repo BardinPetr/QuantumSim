@@ -5,8 +5,6 @@ from socket import create_connection, create_server
 from time import sleep
 
 import pyshark
-import pytun
-from pytun import TunTapDevice, IFF_TUN
 
 from src.crypto.Crypto import Crypto
 from src.crypto.KeyManager import KeyManager
@@ -38,6 +36,7 @@ class Bridge(Eventable):
                  tun_ip: str, tun_netmask: str = '255.255.255.0',
                  in_port=51001, out_port=51002):
         super().__init__()
+
         self.crypto = crypto
 
         self.external_ip = external_ip
@@ -48,8 +47,16 @@ class Bridge(Eventable):
         self.running = True
         self.threads = []
 
-        self.tun = TunTapDevice(flags=IFF_TUN)
-        self.tun_up(tun_ip, tun_netmask)
+        self.is_pytun_enabled = True
+        try:
+            import pytun
+            from pytun import TunTapDevice, IFF_TUN
+        except ImportError:
+            self.is_pytun_enabled = False
+
+        if self.is_pytun_enabled:
+            self.tun = TunTapDevice(flags=IFF_TUN)
+            self.tun_up(tun_ip, tun_netmask)
 
         self.server_sock = create_server(("0.0.0.0", self.in_port))
         self.client_sock = None
@@ -75,6 +82,9 @@ class Bridge(Eventable):
         self.tun.up()
 
     def _process_incoming_tunnel(self):
+        if not self.is_pytun_enabled:
+            return
+
         while self.running:
             data = self.tun.read(self.tun.mtu)
             cap = pyshark.InMemCapture()
@@ -87,11 +97,12 @@ class Bridge(Eventable):
     def __del__(self):
         self.running = False
 
-        try:
-            self.tun.down()
-            self.tun.close()
-        except pytun.Error:
-            pass
+        if self.is_pytun_enabled:
+            try:
+                self.tun.down()
+                self.tun.close()
+            except pytun.Error:
+                pass
 
         for i in self.connections.values():
             try:
@@ -133,7 +144,7 @@ class Bridge(Eventable):
             return
 
         ip, header, data, is_from_client = self.read_deque[0]
-        print(f"Received packet from {ip} with data: {data}")
+        print(f"Received packet from {ip} with header: {header} and data: {data}")
 
         if header == Bridge.HEADER_CTRL:
             if data[0] == Bridge.LOCK_CTRL_MSG_REQUEST:  # We are going to receive message
@@ -223,8 +234,8 @@ def main():
     c0 = Crypto(KeyManager(directory=f'{getcwd()}/../data/alice'))
     c1 = Crypto(KeyManager(directory=f'{getcwd()}/../data/bob'))
 
-    b0 = Bridge(c0, '0.0.0.0', '10.10.10.1', in_port=51001)
-    b1 = Bridge(c1, '127.0.0.1', '10.10.10.2', in_port=51002)
+    b0 = Bridge(c0, '127.0.0.1', '10.10.10.1', in_port=51001)
+    b1 = Bridge(c1, '127.0.0.2', '10.10.10.2', in_port=51002)
 
     b0.subscribe(Bridge.EVENT_SOCKET_INCOMING, lambda x: print("0", x))
     b1.subscribe(Bridge.EVENT_SOCKET_INCOMING, lambda x: print("1", x))
@@ -232,14 +243,14 @@ def main():
     threading.Thread(target=b0.run, daemon=True).run()
     threading.Thread(target=b1.run, daemon=True).run()
 
-    b1.connect('0.0.0.0', 51001)
+    b1.connect('127.0.0.2', 51001)
     # print(len(c0.km.key_file), c0.km.available(), c1.km.available())
-    b1.send_crypt('0.0.0.0', b'code1')
-    b1.send_crypt('0.0.0.0', b'code2')
+    b1.send_crypt('127.0.0.2', b'code1')
+    b1.send_crypt('127.0.0.2', b'code2')
     # sleep(1)
     # print(c0.km.available(), c1.km.available())
     b0.send_crypt('127.0.0.1', b'code3')
-    b1.send_crypt('0.0.0.0', b'code4')
+    b1.send_crypt('127.0.0.2', b'code4')
     b0.send_crypt('127.0.0.1', b'code5')
     # sleep(1)
     # print(c0.km.available(), c1.km.available())

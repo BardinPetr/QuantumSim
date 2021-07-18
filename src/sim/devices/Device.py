@@ -1,4 +1,5 @@
 from typing import Union
+from uuid import uuid1
 
 from src.Eventable import Eventable
 from src.sim.Wave import *
@@ -17,11 +18,15 @@ class Device(Eventable):
         self.inputs = list()
         self.name = name
 
+        self.uuid = uuid1().hex
+
     def __repr__(self):
         return self.name
 
     def __call__(self, wave_in: Union[Wave, None] = None):
         self.emit(Device.EVENT_IN, wave_in)
+
+        wave_in.append_device_uuid(self.uuid)
 
         result = self.process_full(wave_in)
         if result is None:
@@ -33,7 +38,6 @@ class Device(Eventable):
             self.outputs[0](result)
 
     def process_full(self, wave: Wave) -> Union[Wave, None]:
-        # print(f"Processed wave {photon}")
         return wave
 
     def forward_link(self, *devs, auto=True):

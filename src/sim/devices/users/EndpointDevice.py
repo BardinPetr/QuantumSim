@@ -5,10 +5,9 @@ from src.math.rand import rand_bin
 class EndpointDevice(Device):
     EVENT_KEY_FINISHED = 'key_finished'
 
-    def __init__(self, mac_address: str, name="Basic Device"):
+    def __init__(self, name="Basic Device"):
         super().__init__(name)
         self.bases = []
-        self.mac_address = mac_address
 
         self.current_connection: EndpointDevice = None
 

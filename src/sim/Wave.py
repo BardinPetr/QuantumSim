@@ -12,6 +12,11 @@ class Wave:
 
         self.photons_count = None
 
+        self.history = []
+
+    def append_device_uuid(self, uuid: str):
+        self.history.append(uuid)
+
     def get_photons_count(self):
         if self.photons_count is not None:
             return self.photons_count

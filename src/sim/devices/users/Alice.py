@@ -17,13 +17,12 @@ from src.sim.devices.users.EndpointDevice import EndpointDevice
 
 class Alice(EndpointDevice):
     def __init__(self,
-                 mac_address: str,
                  params: AliceHardwareParams,
                  classic_channel: ClassicChannel,
                  key_manager: KeyManager,
                  session_size: int = 10 ** 5,
                  name: str = "Alice"):
-        super().__init__(mac_address, name)
+        super().__init__(name)
 
         self.hard_params = params
         self.clock = Clock(params.laser_period)
@@ -35,7 +34,7 @@ class Alice(EndpointDevice):
         self.current_connection: int = None
 
         self.classic_channel = classic_channel
-        self.classic_channel.subscribe(ClassicChannel.EVENT_ON_RECV, self.on_classic_recv)
+        self.classic_channel.subscribe(ClassicChannel.EVENT_MESSAGE_INCOMING, self.on_message)
 
         self.subscribe(Alice.EVENT_KEY_FINISHED, key_manager.append)
         self.subscribe(Alice.EVENT_AFTER_FORWARD_LINK, self.device_linked)
@@ -46,10 +45,8 @@ class Alice(EndpointDevice):
         if self.current_connection is None:
             self.current_connection = 0
 
-    def on_classic_recv(self, data):
-        mac_address, data = data
-        if mac_address != self.mac_address:
-            return
+    def on_message(self, data):
+        _, data = data
 
         data: BB84ClassicChannelData = BB84ClassicChannelData.from_json(data)
 
@@ -58,7 +55,7 @@ class Alice(EndpointDevice):
 
     def save_key(self, key):
         self.emit(EndpointDevice.EVENT_KEY_FINISHED, key)
-        print(f'alice ({self.mac_address}) got key: ', *key[:25], sep='\t')
+        print(f'alice ({self.uuid}) got key: ', *key[:25], sep='\t')
 
     def start(self, progress_bar=True):
         while True:
@@ -71,8 +68,8 @@ class Alice(EndpointDevice):
             self.current_connection = random.randint(0, len(self.outputs) - 1)
 
     def check_bases(self):
-        self.classic_channel.send(
-            self.outputs[self.current_connection].mac_address,
+        self.classic_channel.send_data(
+            self.outputs[self.current_connection],
             BB84ClassicChannelData(
                 bases=self.bases
             ).to_json().encode('utf-8')
