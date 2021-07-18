@@ -56,8 +56,6 @@ class Bob(EndpointDevice):
             if inp.mac_address == mac_address:
                 self.current_connection = mac_address
 
-                
-
                 self.reset()
                 break
         else:
@@ -93,7 +91,7 @@ class Bob(EndpointDevice):
 
     def save_key(self, key):
         self.emit(EndpointDevice.EVENT_KEY_FINISHED, key)
-        print('bob  ', *key[:25], sep='\t')
+        print(f'bob ({self.mac_address}) got key: ', *key[:25], sep='\t')
 
     def reset(self):
         self.bases = []
