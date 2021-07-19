@@ -47,21 +47,21 @@ class KeyManager(Eventable):
     def clear(self):
         self.key_file.clear()
 
-    def get(self, length: int, bits=True, psk=False):
-        # return np.zeros(length, dtype='uint8')
-        length = length if bits else length * 8
+    def get(self, length_bits: int, return_bits=True, psk=False):
+        # key = np.zeros(length_bits, dtype='uint8')
+        # return key if return_bits else np.packbits(key)
 
         if psk:
-            key = self.psk_file.read(self.cur_psk_pos, self.cur_psk_pos + length - 1)
-            self.cur_psk_pos += length
+            key = self.psk_file.read(self.cur_psk_pos, self.cur_psk_pos + length_bits - 1)
+            self.cur_psk_pos += length_bits
             self.check_psk()
         else:
-            key = self.key_file.read(self.cur_pos, self.cur_pos + length - 1)
-            self.cur_pos += length
+            key = self.key_file.read(self.cur_pos, self.cur_pos + length_bits - 1)
+            self.cur_pos += length_bits
 
         self.save_cur_pos()
 
-        return key if bits else np.packbits(key)
+        return key if return_bits else np.packbits(key)
 
     def append(self, key: NDArray):
         self.temp_key_file.append(key)
@@ -78,6 +78,7 @@ class KeyManager(Eventable):
         self.emit(KeyManager.EVENT_UPDATED_KEY)
 
     def available(self, psk=False):
+        # return 12321312312
         return len(self.psk_file if psk else self.key_file) - (self.cur_psk_pos if psk else self.cur_pos)
 
     def postprocess_key(self, data):
