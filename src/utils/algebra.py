@@ -7,3 +7,11 @@ def rot_mat(angle):
         [b, -a],
         [a, b]
     ])
+
+
+def ip_str_to_bytes(ip):
+    return bytes([int(i) for i in ip.split('.')])
+
+
+def ip_bytes_to_str(data):
+    return '.'.join([str(i) for i in data])

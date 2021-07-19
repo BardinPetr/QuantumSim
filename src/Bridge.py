@@ -1,3 +1,4 @@
+import logging as L
 import struct
 import threading
 from collections import deque
@@ -17,9 +18,19 @@ from scapy.sendrecv import sniff
 from src.Crypto import Crypto
 from src.KeyManager import KeyManager
 from src.sim.MainDevices.Eventable import Eventable
+from src.utils.algebra import ip_str_to_bytes, ip_bytes_to_str
+
+L.basicConfig(encoding='utf-8', level=L.DEBUG)
 
 
 class Bridge(Eventable):
+    BROADCAST_IP = '255.255.255.255'
+
+    # (dst_ip, mode, packet index, full packets count, msg len, crypt start, crypt end, ipv4) + message
+    BASE_PACKET_STRUCT = 'hHHLHH'
+    DISCOVER_PACKET_STRUCT = 'B4s4s'  # mode, ext_ip, int_ip
+    HEADER_STRUCT = 'h4s'
+
     MODE_PLAIN = 0
     MODE_TUN = 1
     MODE_SPLIT = 2
@@ -35,11 +46,10 @@ class Bridge(Eventable):
     LOCK_FLAG_REJECTED = 4
     LOCK_FLAG_GOT_REJECT = 5
 
-    HEADER_LENGTH = 3
-    HEADER_CTRL = b'ctr'
-    HEADER_CRYPT = b'cry'
-    HEADER_CLASSIC = b'cls'
-    HEADER_DISCOVER = b'dsc'
+    HEADER_CTRL = 0
+    HEADER_CRYPT = 1
+    HEADER_CLASSIC = 2
+    HEADER_DISCOVER = 3
 
     EVENT_SOCKET_INCOMING = 's_inc'
     TUN_MTU = 3000
@@ -51,10 +61,6 @@ class Bridge(Eventable):
                  tun_ip: str, tun_netmask: str = '255.255.255.0',
                  in_port=51001, out_port=51002):
         super().__init__()
-
-        # (mode, packet index, full packets count, msg len, crypt start, crypt end, ipv4) + message
-        self.PACKET_STRUCT = 'hHHLHH'
-        self.DISCOVER_PACKET_STRUCT = 'Bbbbb'
 
         self.cryptos = {}
 
@@ -114,7 +120,6 @@ class Bridge(Eventable):
                 if ip is None:
                     return
                 raw = (LinuxTunPacketInfo() / x).convert_to(Raw).load
-                print(ip, x.summary(), raw)
                 self.send_crypt(ip, raw, mode=Bridge.MODE_TUN)
 
         self.tun_sniff = sniff(count=0, iface=self.tun.name, prn=proc)
@@ -150,11 +155,12 @@ class Bridge(Eventable):
             data = conn.recv(self.SOCKET_MTU)
             if not data:
                 break
-            self.read_deque.append((ip, *Bridge.split_message(data), from_client))
+            self.read_deque.append((ip, *self.split_message(data), from_client))
 
-    @staticmethod
-    def split_message(message):
-        return message[:Bridge.HEADER_LENGTH], message[Bridge.HEADER_LENGTH:]
+    def split_message(self, message):
+        hl = struct.calcsize(self.HEADER_STRUCT)
+        header_m, header_ip = struct.unpack(self.HEADER_STRUCT, message[:hl])
+        return header_m, ip_bytes_to_str(header_ip), message[hl:]
 
     def _process_queues(self):
         while self.running:
@@ -172,24 +178,20 @@ class Bridge(Eventable):
         if len(self.read_deque) == 0:
             return
 
-        ip, header, data, is_from_client = self.read_deque[0]
-        # print(f"RECV {header} from {ip} with data: {data}...")
+        from_ip, header, target_ip, data, is_from_client = self.read_deque[0]
+        L.debug(f"RECV F:{from_ip} H:{header} D:{data}...")
 
-        if header == Bridge.HEADER_DISCOVER:
-            data = struct.unpack(self.DISCOVER_PACKET_STRUCT, data)
-            tun_ip = '.'.join([str(i) for i in data[1:]])
-            self.tun_to_ext_ip[tun_ip] = ip
-        elif header == Bridge.HEADER_CTRL:
+        if header == Bridge.HEADER_CTRL:
             if data[0] == Bridge.LOCK_CTRL_MSG_REQUEST:  # We are going to receive message
                 if self.send_lock != Bridge.LOCK_FLAG_IDLE:
                     if not is_from_client:
                         self.read_deque.popleft()
-                        self.send_data(ip, Bridge.HEADER_CTRL, bytes([Bridge.LOCK_CTRL_MSG_REJECT]))
+                        self.send_data(from_ip, Bridge.HEADER_CTRL, bytes([Bridge.LOCK_CTRL_MSG_REJECT]))
                         return
 
                     self.send_lock = Bridge.LOCK_FLAG_REJECTED
 
-                self.send_data(ip, Bridge.HEADER_CTRL, bytes([Bridge.LOCK_CTRL_MSG_RESPONSE]))
+                self.send_data(from_ip, Bridge.HEADER_CTRL, bytes([Bridge.LOCK_CTRL_MSG_RESPONSE]))
                 self.recv_lock = Bridge.LOCK_FLAG_LISTEN
 
             elif data[0] == Bridge.LOCK_CTRL_MSG_RESPONSE:  # Connection established. We are going to send message
@@ -203,17 +205,15 @@ class Bridge(Eventable):
             if self.send_lock == Bridge.LOCK_FLAG_REJECTED:
                 self.send_lock = Bridge.LOCK_FLAG_IDLE
 
-            crypt = self.get_crypto(ip)
+            crypt = self.get_crypto(from_ip)
             if crypt is None:
                 self.read_deque.popleft()
                 return
 
-            # print(f"PKT {header}@{0} from {ip} with data: {data}...")
-
             try:
                 mode, index, pkts_len, msg_len, crypt_start, crypt_end = \
-                    struct.unpack(self.PACKET_STRUCT, data[:struct.calcsize(self.PACKET_STRUCT)])
-                data = data[struct.calcsize(self.PACKET_STRUCT):]
+                    struct.unpack(self.BASE_PACKET_STRUCT, data[:struct.calcsize(self.BASE_PACKET_STRUCT)])
+                data = data[struct.calcsize(self.BASE_PACKET_STRUCT):]
             except:
                 self.read_deque.popleft()
                 return
@@ -221,21 +221,41 @@ class Bridge(Eventable):
             if crypt_start != crypt_end:
                 data = crypt.decrypt(data, crypt_start=crypt_start, crypt_end=crypt_end)
 
-            if mode == Bridge.MODE_TUN:
-                # print(data)
+            # packet forwarding
+            if target_ip != self.external_ip:
+                self.send_crypt(
+                    target_ip,
+                    data,
+                    mode=mode,
+                    crypt_start=crypt_start,
+                    crypt_end=crypt_end
+                )
+
+            elif mode == Bridge.MODE_TUN:
                 self.tun.write(data)
 
-            if mode == Bridge.MODE_SPLIT:
-                if ip not in self.split_data:
-                    self.split_data[ip] = dict()
-                self.split_data[ip][index] = data
+            elif mode == Bridge.MODE_SPLIT:
+                if from_ip not in self.split_data:
+                    self.split_data[from_ip] = dict()
+                self.split_data[from_ip][index] = data
 
-                if len(self.split_data[ip]) == pkts_len:
+                if len(self.split_data[from_ip]) == pkts_len:
                     res = bytes(reduce(lambda acc, i: acc + i[1],
-                                       sorted(self.split_data[ip].items(), key=lambda x: x[0]),
+                                       sorted(self.split_data[from_ip].items(), key=lambda x: x[0]),
                                        bytearray()))
-                    del self.split_data[ip]
+                    del self.split_data[from_ip]
+
                     self.emit(Bridge.EVENT_SOCKET_INCOMING, res[:msg_len])
+
+        else:
+            # packet forwarding
+            if target_ip != self.external_ip:  # this include broadcast already
+                self.send_data(target_ip, header, data, ignore_ip=from_ip)
+
+            if header == Bridge.HEADER_DISCOVER:
+                _, ext_ip, int_ip = struct.unpack(self.DISCOVER_PACKET_STRUCT, data)
+                self.tun_to_ext_ip[ip_bytes_to_str(int_ip)] = ip_bytes_to_str(ext_ip)
+                L.debug(f"CURRENT DIRECT CONNS {self.tun_to_ext_ip}")
 
         self.read_deque.popleft()
 
@@ -243,64 +263,74 @@ class Bridge(Eventable):
         if len(self.send_deque) == 0:
             return
 
-        ip, header, data = self.send_deque[idx]
+        msg_target_ip, msg_header, raw_data, from_ip = self.send_deque[idx]
 
-        ip = self.next_hop(ip)
+        for target_ip in [msg_target_ip] if msg_target_ip != Bridge.BROADCAST_IP else self.connections.keys():
+            if from_ip is not None and target_ip in [from_ip, self.external_ip]:
+                continue
 
-        if self.recv_lock == self.LOCK_FLAG_LISTEN and \
-                not (header == Bridge.HEADER_CTRL and data[0] == Bridge.LOCK_CTRL_MSG_RESPONSE):
-            return
+            header = msg_header
+            data = raw_data[:]
 
-        if header == Bridge.HEADER_CRYPT:
-            if self.send_lock == Bridge.LOCK_FLAG_IDLE:
-                self.send_data(ip, Bridge.HEADER_CTRL, bytes([Bridge.LOCK_CTRL_MSG_REQUEST]))
+            ip = self.next_hop(target_ip)
+            L.debug(f"NEXT HOP {target_ip} -> {ip}")
+
+            if self.recv_lock == self.LOCK_FLAG_LISTEN and \
+                    not (header == Bridge.HEADER_CTRL and data[0] == Bridge.LOCK_CTRL_MSG_RESPONSE):
                 return
-            elif self.send_lock in [Bridge.LOCK_FLAG_SENT, Bridge.LOCK_FLAG_REJECTED]:
-                return
 
-            cs, ce = data[4], data[5]
-
-            if cs != ce:
-                crypt = self.get_crypto(ip)
-                if crypt is None:
+            if header == Bridge.HEADER_CRYPT:
+                if self.send_lock == Bridge.LOCK_FLAG_IDLE:
+                    self.send_data(ip, Bridge.HEADER_CTRL, bytes([Bridge.LOCK_CTRL_MSG_REQUEST]))
+                    return
+                elif self.send_lock in [Bridge.LOCK_FLAG_SENT, Bridge.LOCK_FLAG_REJECTED]:
                     return
 
-                if crypt.km.available() < (ce - cs) * 8:
-                    return
+                cs, ce = data[4], data[5]
 
-                data[6] = crypt.encrypt(data[6], crypt_start=cs, crypt_end=ce)
+                if cs != ce:
+                    crypt = self.get_crypto(ip)
+                    if crypt is None:
+                        return
 
-            data = struct.pack(self.PACKET_STRUCT, *data[:-1]) + data[6]
+                    if crypt.km.available() < (ce - cs) * 8:
+                        return
 
-            self.send_lock = Bridge.LOCK_FLAG_IDLE
+                    data[-1] = crypt.encrypt(data[-1], crypt_start=cs, crypt_end=ce)
 
-        elif header == Bridge.HEADER_CTRL and data[0] == Bridge.LOCK_CTRL_MSG_REQUEST:
-            self.send_lock = Bridge.LOCK_FLAG_SENT
+                data = struct.pack(self.BASE_PACKET_STRUCT, *data[:-1]) + data[-1]
 
-        try:
-            conn = self.connections[ip]
-            conn.send(header + data)
-            # print(f"SENDING: {header} {data} {ip}")
-        except:
-            print(f"FAILED SENDING: {header} {data} {ip}")
+                self.send_lock = Bridge.LOCK_FLAG_IDLE
+
+            elif header == Bridge.HEADER_CTRL and data[0] == Bridge.LOCK_CTRL_MSG_REQUEST:
+                self.send_lock = Bridge.LOCK_FLAG_SENT
+
+            header = struct.pack(self.HEADER_STRUCT, header, ip_str_to_bytes(msg_target_ip))
+
+            try:
+                L.debug(f"SENDING: {header} {data} {ip}")
+                conn = self.connections[ip]
+                conn.send(header + data)
+            except:
+                L.warning(f"FAILED SENDING: {header} {data} {ip}")
 
         self.send_deque.popleft()
 
-    def send_data(self, ip: str, header: bytes, data):
+    def send_data(self, ip: str, header: int, data, ignore_ip=None):
         if Bridge.HEADER_CTRL == header:
-            self.send_deque.appendleft((ip, header, data))
+            self.send_deque.appendleft((ip, header, data, ignore_ip))
         else:
-            self.send_deque.append((ip, header, data))
+            self.send_deque.append((ip, header, data, ignore_ip))
 
-    def broadcast(self, header: bytes, data: bytes):
-        for i in self.connections.keys():
-            self.send_data(i, header, data)
+    def broadcast(self, header: int, data):
+        self.send_data(self.BROADCAST_IP, header, data)
 
     def broadcast_ip(self):
         self.broadcast(Bridge.HEADER_DISCOVER,
-                       struct.pack(self.DISCOVER_PACKET_STRUCT, 0, *map(int, self.tun_ip.split('.'))))
+                       struct.pack(self.DISCOVER_PACKET_STRUCT,
+                                   0, ip_str_to_bytes(self.external_ip), ip_str_to_bytes(self.tun_ip)))
 
-    def send_crypt(self, ip: str, data: bytes, mode=None, crypt_start=0, crypt_end=None):
+    def send_crypt(self, ip: str, data: bytes, mode=None, crypt_start=0, crypt_end=None, target_ip=None):
         crypt_end = len(data) if crypt_end is None else crypt_end
         mode = Bridge.MODE_SPLIT if mode is None else mode
 
@@ -308,7 +338,8 @@ class Bridge(Eventable):
             self.send_data(
                 ip,
                 Bridge.HEADER_CRYPT,
-                [mode, 0, 0, len(data), crypt_start, crypt_end, data]
+                [mode, 0, 0, len(data), crypt_start, crypt_end, data],
+                target_ip
             )
             return
 
@@ -340,7 +371,7 @@ class Bridge(Eventable):
     def next_hop(self, target_ext_ip):
         if target_ext_ip in self.connections.keys():
             return target_ext_ip
-        return None
+        return next(iter(self.connections.keys())) if len(self.connections.keys()) > 0 else None
 
     def run(self):
         self.threads = [threading.Thread(target=i, daemon=True) for i in [
@@ -372,16 +403,6 @@ def main():
     threading.Thread(target=b0.run, daemon=True).start()
     threading.Thread(target=b1.run, daemon=True).start()
 
-    # sleep(2)
-    # print(b0.connections)
-    # print(b1.connections)
-
-    # b1.send_crypt('0.0.0.0', b'code1')
-    # b1.send_crypt('0.0.0.0', b'code2')
-    # b0.send_crypt('127.0.0.1', b'code3')
-    # b1.send_crypt('0.0.0.0', b'code4')
-    # b0.send_crypt('127.0.0.1', b'code5')
-
     sleep(500000)
 
     del b0
@@ -392,13 +413,13 @@ def main2():
     c0 = Crypto(KeyManager(directory=f'{getcwd()}/../data/alice'))
     # c1 = Crypto(KeyManager(directory=f'{getcwd()}/../data/bob'))
 
-    b0 = Bridge('0.0.0.0', '10.10.10.1', '255.255.255.0', in_port=50001)
+    b0 = Bridge('192.168.1.66', '10.10.10.1', '255.255.255.0', in_port=50001)
     # b1 = Bridge(c1, '127.0.0.1', '10.10.10.2', '255.255.255.0', in_port=51002)
 
-    b0.register_crypto('127.0.0.1', c0)
-    b0.subscribe(Bridge.EVENT_SOCKET_INCOMING, lambda x: print("0", x))
+    b0.register_crypto('192.168.1.72', c0)
+    # b0.subscribe(Bridge.EVENT_SOCKET_INCOMING, lambda x: print("0", x))
     # b1.subscribe(Bridge.EVENT_SOCKET_INCOMING, lambda x: print("1", x))
-    b0.connect('127.0.0.1', 51002)
+    b0.connect('192.168.1.72', 51002)
 
     # b0.send_crypt('127.0.0.1', b'324')
 
