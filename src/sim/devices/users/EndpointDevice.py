@@ -3,6 +3,9 @@ from src.math.rand import rand_bin
 
 
 class EndpointDevice(Device):
+    MESSAGE_CONNECTION_REMOVE = b'321'
+    MESSAGE_ALICE_START_SEND_WAVES_REQUEST = b'123'
+
     EVENT_KEY_FINISHED = 'key_finished'
 
     def __init__(self, name="Basic Device"):

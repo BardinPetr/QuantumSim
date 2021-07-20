@@ -1,8 +1,9 @@
-import os
 import threading
+from time import sleep
 
+from src.Bridge import Bridge
+from src.crypto.Crypto import Crypto
 from src.crypto.KeyManager import KeyManager
-from src.sim.ClassicChannel import ClassicChannel
 from src.sim.data.AliceHardwareParams import AliceHardwareParams
 from src.sim.data.BobHardwareParams import BobHardwareParams
 from src.sim.devices.users.Alice import Alice
@@ -16,28 +17,35 @@ def main():
     )
     bhp = BobHardwareParams()
 
-    # channel for public messages (TODO: replace with Bridge)
-    alice_cc = ClassicChannel('alice')
-    bob1_cc = ClassicChannel('bob1')
-    bob2_cc = ClassicChannel('bob2')
+    # Alice init
+    alice_km = KeyManager(directory='data/alice')
+    alice_bridge = Bridge(Crypto(alice_km), '127.0.0.1', '10.10.10.1', in_port=51001)
 
-    bob1_cc.connect(alice_cc)
-    bob2_cc.connect(alice_cc)
+    alice = Alice(ahp, bridge=alice_bridge, key_manager=alice_km, session_size=10 ** 4)
 
-    km_alice = KeyManager(directory=f'{os.getcwd()}/data/alice')
+    # first Bob init
+    bob1_km = KeyManager(directory='data/bob1')
+    bob1_bridge = Bridge(Crypto(alice_km), '127.0.0.2', '10.10.10.2', in_port=51002)
 
-    km_bob1 = KeyManager(directory=f'{os.getcwd()}/data/bob1')
-    km_bob2 = KeyManager(directory=f'{os.getcwd()}/data/bob2')
+    bob1 = Bob(bhp, bridge=bob1_bridge, key_manager=bob1_km)
 
-    alice = Alice(ahp, classic_channel=alice_cc, key_manager=km_alice, session_size=10 ** 4)
+    # second Bob init
+    # bob2_km = KeyManager(directory='data/bob2')
+    # bob2_bridge = Bridge(Crypto(alice_km), '127.0.0.3', '10.10.10.3')
+    #
+    # bob2 = Bob(bhp, bridge=bob2_bridge, key_manager=bob2_km)
 
-    bob1 = Bob(bhp, classic_channel=bob1_cc, key_manager=km_bob1)
+    # connections
     alice.forward_link(bob1)
+    # alice.forward_link(bob2)
 
-    bob2 = Bob(bhp, classic_channel=bob2_cc, key_manager=km_bob2)
-    alice.forward_link(bob2)
+    alice_bridge.connect('127.0.0.2', 51002)
 
     threading.Thread(target=lambda: alice.start(progress_bar=False), daemon=True).run()
+
+    sleep(1)
+
+    alice.set_bob(bob1.bridge.external_ip)
 
     while True:
         pass

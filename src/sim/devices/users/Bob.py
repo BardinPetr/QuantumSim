@@ -3,6 +3,7 @@ import math
 import numpy as np
 from numpy.typing import NDArray
 
+from src.Bridge import Bridge
 from src.crypto.KeyManager import KeyManager
 from src.sim.ClassicChannel import ClassicChannel
 from src.sim.Wave import Wave
@@ -10,64 +11,68 @@ from src.sim.data.BB84ClassicChannelData import BB84ClassicChannelData
 from src.sim.data.BobHardwareParams import BobHardwareParams
 from src.sim.devices.Detector import Detector
 from src.sim.devices.HalfWavePlate import HalfWavePlate
+from src.sim.devices.users.Alice import Alice
 from src.sim.devices.users.EndpointDevice import EndpointDevice
 
 
 class Bob(EndpointDevice):
     def __init__(self,
                  params: BobHardwareParams,
-                 classic_channel: ClassicChannel,
+                 bridge: Bridge,
                  key_manager: KeyManager,
                  name: str = "Bob"):
         super().__init__(name)
 
+        # параметры установок Боба
         self.hard_params = params
 
+        # ключ, полученный в процессе генерации (без сверки базисов)
         self.base_key = []
 
-        # individual for every connection
-        self.connections_laser_periods = {}
+        # период лазера Алисы из текущего подключения
+        self.current_connection: Alice = None
 
+        # cловарь, где индекс - это номер входа в Боба, а значение - внешний ip Алисы, которая подключена к этому входу
+        self.inputs_ip: dict = {}
+
+        # время, когда пришёл последний сигнал от Алисы
         self.last_wave_time = 0
 
-        self.current_connection: str = None
+        # Алиса, к которой Боб подключится после окончания работы с предыдущей
+        self.next_connection: Alice = None
 
-        self.classic_channel = classic_channel
-        self.classic_channel.subscribe(ClassicChannel.EVENT_ON_RECV, self.on_classic_recv)
+        # мост для классического канала связи со всеми подключенными Алисами
+        self.bridge = bridge
+        self.bridge.subscribe(Bridge.EVENT_SOCKET_INCOMING, self.on_message)
 
+        # добавляем ключ в KeyManager, когда он сгенерирован
         self.subscribe(Bob.EVENT_KEY_FINISHED, key_manager.append)
 
+        # генерируем оптическую схему
         self.gen_optic_scheme()
 
-        self.subscribe(Bob.EVENT_AFTER_BACK_LINK, self.device_linked)
+    def switch_to_alice(self, alice_ip: str):
+        # отправляет текущей Алисе сообщение о том, что пора заканчивать передачу.
+        self.bridge.send_data(
+            alice_ip,
+            Bridge.HEADER_CLASSIC,
+            EndpointDevice.MESSAGE_CONNECTION_REMOVE
+        )
 
-    def device_linked(self):
-        for inp in self.inputs:
-            if inp.mac_address not in self.connections_laser_periods:
-                self.connections_laser_periods[inp.mac_address] = inp.hard_params.laser_period
+        self.switching_status = SWITCHING_STATUS_WAITING
+        self.next_connection = self.inputs_ip.index(alice_ip)
 
-        if self.current_connection is None:
-            self.current_connection = self.inputs[0].mac_address
-            self.last_wave_time = -self.connections_laser_periods[self.current_connection]
+        # ждёт конца передачи от Алисы
+        # сверяет базисы
+        # переключается на другую Алису
+        # присылает этой Алисе команду, что пора начинать с ним работу
 
-    def connect_to(self, mac_address: str):
-        for inp in self.inputs:
-            if inp.mac_address == mac_address:
-                self.current_connection = mac_address
+    def on_message(self, data):
+        ip, data = data
 
-                self.reset()
-                break
-        else:
-            raise Exception(f'There is no connection with mac address {mac_address}')
+        data: BB84ClassicChannelData = BB84ClassicChannelData.from_json(data.decode('utf-8'))
 
-    def on_classic_recv(self, data):
-        mac_address, data = data
-        if mac_address != self.mac_address:
-            return
-
-        data: BB84ClassicChannelData = BB84ClassicChannelData.from_json(data.decode())
-
-        self.fix_photon_statistics(len(data.bases) * self.connections_laser_periods[self.current_connection])
+        self.fix_photon_statistics(len(data.bases) * self.current_connection.hard_params.laser_period)
 
         alice_bases = np.array(data.bases, dtype='bool')
         bob_bases = np.array(self.bases, dtype='bool')
@@ -79,8 +84,9 @@ class Bob(EndpointDevice):
 
         self.save_key(key[ids].astype('bool'))
 
-        self.classic_channel.send(
-            self.current_connection,
+        self.bridge.send_data(
+            ip,
+            Bridge.HEADER_CLASSIC,
             BB84ClassicChannelData(
                 save_ids=same_bases_ids[ids].tolist()
             ).to_json().encode('utf-8')
@@ -90,13 +96,23 @@ class Bob(EndpointDevice):
 
     def save_key(self, key):
         self.emit(EndpointDevice.EVENT_KEY_FINISHED, key)
-        print(f'bob ({self.mac_address}) got key: ', *key[:25], sep='\t')
+        print(f'bob ({self.bridge.external_ip}) got key: ', *key[:25], sep='\t')
 
     def reset(self):
+        if self.next_connection is not None:
+            self.current_connection = self.next_connection
+            self.next_connection = None
+
+            self.bridge.send_data(
+                self.current_connection.bridge.external_ip,
+                Bridge.HEADER_CLASSIC,
+                EndpointDevice.MESSAGE_ALICE_START_SEND_WAVES_REQUEST
+            )
+
         self.bases = []
         self.base_key = []
 
-        self.last_wave_time = -self.connections_laser_periods[self.current_connection]
+        self.last_wave_time = -self.current_connection.hard_params.laser_period
 
         self.detector.reset()
 
@@ -114,7 +130,7 @@ class Bob(EndpointDevice):
         self.hwp.forward_link(self.detector)
 
     def fix_photon_statistics(self, time):
-        current_laser_period = self.connections_laser_periods[self.current_connection]
+        current_laser_period = self.current_connection.hard_params.laser_period
 
         if self.last_wave_time < time - current_laser_period:
             missed_count = math.ceil(
@@ -123,9 +139,6 @@ class Bob(EndpointDevice):
             self.base_key += [2] * missed_count
 
     def on_detection(self, wave: Wave):
-        if wave.history[-1] != self.inputs[self.current_connection].uuid:
-            return
-
         self.fix_photon_statistics(wave.time)
 
         state = wave.state.read(self.hard_params.read_basis)

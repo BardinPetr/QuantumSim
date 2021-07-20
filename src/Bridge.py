@@ -109,6 +109,7 @@ class Bridge(Eventable):
                 i.close()
             except:
                 pass
+
         if self.server_sock is not None:
             self.server_sock.close()
 
@@ -169,7 +170,7 @@ class Bridge(Eventable):
             self.recv_lock = Bridge.LOCK_FLAG_IDLE
             if self.send_lock == Bridge.LOCK_FLAG_REJECTED:
                 self.send_lock = Bridge.LOCK_FLAG_IDLE
-            self.emit(Bridge.EVENT_SOCKET_INCOMING, data)
+            self.emit(Bridge.EVENT_SOCKET_INCOMING, (ip, data))
 
         self.read_deque.popleft()
 
