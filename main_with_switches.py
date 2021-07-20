@@ -1,4 +1,3 @@
-import threading
 from time import sleep
 
 from src.Bridge import Bridge
@@ -38,14 +37,13 @@ def main():
     # connections
     alice.forward_link(bob1)
     # alice.forward_link(bob2)
+    alice.connect_to_bob(bob1.bridge.external_ip,  bob1.bridge.in_port)
 
-    alice_bridge.connect('127.0.0.2', 51002)
+    # sleep(5)
 
-    threading.Thread(target=lambda: alice.start(progress_bar=False), daemon=True).run()
+    print("connecting to Alice...")
 
-    sleep(1)
-
-    alice.set_bob(bob1.bridge.external_ip)
+    bob1.switch_to_alice(alice.bridge.external_ip)
 
     while True:
         pass

@@ -1,4 +1,3 @@
-import random
 import threading
 from typing import Union
 
@@ -14,7 +13,6 @@ from src.sim.data.BB84ClassicChannelData import BB84ClassicChannelData
 from src.sim.devices.Device import Device
 from src.sim.devices.HalfWavePlate import HalfWavePlate
 from src.sim.devices.Laser import Laser
-from src.sim.devices.users.Bob import Bob
 from src.sim.devices.users.EndpointDevice import EndpointDevice
 
 
@@ -39,11 +37,8 @@ class Alice(EndpointDevice):
         # размер сессии (TODO: возможно переложить эту обязанность на центральный узел)
         self.session_size = session_size
 
-        # текущее подключение
-        self.current_connection: Bob = None
-
-        # следующее в очереди подключение
-        self.next_connection: Bob = None
+        # внешний ip адрес текущего подключения
+        self.current_connection: str = None
 
         # словарь, в котором индексы - внешние ip адреса, а значения - выходы из Алисы
         self.output_ips = {}
@@ -53,6 +48,8 @@ class Alice(EndpointDevice):
 
         # мост для связи по классическому каналу
         self.bridge = bridge
+        threading.Thread(target=self.bridge.run, daemon=True).run()
+
         self.bridge.subscribe(Bridge.EVENT_SOCKET_INCOMING, self.on_message)
 
         # вызов KeyManager, когда ключ завершён и обработан
@@ -62,24 +59,21 @@ class Alice(EndpointDevice):
         # создание оптической схемы
         self.gen_optic_scheme()
 
-    def connect_to_bob(self, bob: Bob):
-        self.bridge.connect(bob.bridge.external_ip)
+    def connect_to_bob(self, external_ip: str, port: int):
+        self.bridge.connect(external_ip, port)
 
     def device_linked(self):
-        if self.current_connection is None:
-            self.current_connection = self.outputs[0]
-
         # auto discover connected bob external ips
         for (index, output) in enumerate(self.outputs):
             current_device: Device = output
 
-            while not isinstance(current_device, Bob) and len(current_device.outputs) != 1:
+            while not isinstance(current_device, EndpointDevice) and len(current_device.inputs) != 1:
                 current_device = list(filter(
                     lambda x: x != current_device,
                     current_device.outputs
                 ))[0]
 
-            if len(current_device.outputs) == 1:
+            if len(current_device.inputs) == 1:
                 return
 
             self.output_ips[current_device.bridge.external_ip] = index
@@ -88,19 +82,21 @@ class Alice(EndpointDevice):
         ip, data = data
 
         if data == EndpointDevice.MESSAGE_CONNECTION_REMOVE:
+            if not self.emit_waves:
+                self.bridge.send_data(
+                    ip, Bridge.HEADER_CLASSIC, EndpointDevice.MESSAGE_ALICE_SWITCHED_WITHOUT_CHECKING_BASES
+                )
+
             self.emit_waves = False
-            self.next_connection = self.output_ips[ip]
-            return
-
-        if data == EndpointDevice.MESSAGE_ALICE_START_SEND_WAVES_REQUEST:
+        elif data == EndpointDevice.MESSAGE_ALICE_START_SEND_WAVES_REQUEST:
             self.emit_waves = True
+            self.current_connection = ip
             threading.Thread(target=self.start, daemon=True).run()
-            return
+        else:
+            data: BB84ClassicChannelData = BB84ClassicChannelData.from_json(data)
 
-        data: BB84ClassicChannelData = BB84ClassicChannelData.from_json(data)
-
-        key = np.array(self.base_key)[data.save_ids]
-        self.save_key(key)
+            key = np.array(self.base_key)[data.save_ids]
+            self.save_key(key)
 
     def save_key(self, key):
         self.emit(EndpointDevice.EVENT_KEY_FINISHED, key)
@@ -118,13 +114,9 @@ class Alice(EndpointDevice):
 
         self.check_bases()
 
-        if self.next_connection is not None:
-            self.current_connection = self.next_connection
-            self.next_connection = None
-
     def check_bases(self):
         self.bridge.send_data(
-            self.current_connection.bridge.external_ip,
+            self.current_connection,
             Bridge.HEADER_CLASSIC,
             BB84ClassicChannelData(
                 bases=self.bases
@@ -146,5 +138,5 @@ class Alice(EndpointDevice):
 
     def __call__(self, wave_in: Union[Wave, None] = None):
         self.outputs[
-            self.output_ips[self.current_connection.bridge.external_ip]
+            self.output_ips[self.current_connection]
         ](wave_in)

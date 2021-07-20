@@ -1,15 +1,16 @@
 import math
+import threading
 
 import numpy as np
 from numpy.typing import NDArray
 
 from src.Bridge import Bridge
 from src.crypto.KeyManager import KeyManager
-from src.sim.ClassicChannel import ClassicChannel
 from src.sim.Wave import Wave
 from src.sim.data.BB84ClassicChannelData import BB84ClassicChannelData
 from src.sim.data.BobHardwareParams import BobHardwareParams
 from src.sim.devices.Detector import Detector
+from src.sim.devices.Device import Device
 from src.sim.devices.HalfWavePlate import HalfWavePlate
 from src.sim.devices.users.Alice import Alice
 from src.sim.devices.users.EndpointDevice import EndpointDevice
@@ -43,13 +44,31 @@ class Bob(EndpointDevice):
 
         # мост для классического канала связи со всеми подключенными Алисами
         self.bridge = bridge
+        threading.Thread(target=self.bridge.run, daemon=True).run()
+
         self.bridge.subscribe(Bridge.EVENT_SOCKET_INCOMING, self.on_message)
 
         # добавляем ключ в KeyManager, когда он сгенерирован
         self.subscribe(Bob.EVENT_KEY_FINISHED, key_manager.append)
 
+        self.subscribe(Device.EVENT_AFTER_BACK_LINK, self.device_linked)
+
         # генерируем оптическую схему
         self.gen_optic_scheme()
+
+    def device_linked(self):
+        # auto discover connected alice's external ips
+        for (index, inp) in enumerate(self.inputs):
+            current_device: Device = inp
+
+            while not isinstance(current_device, EndpointDevice) and len(current_device.outputs) != 1:
+                current_device = list(filter(
+                    lambda x: x != current_device,
+                    current_device.inputs
+                ))[0]
+
+            if isinstance(current_device, EndpointDevice):
+                self.inputs_ip[current_device.bridge.external_ip] = index
 
     def switch_to_alice(self, alice_ip: str):
         # отправляет текущей Алисе сообщение о том, что пора заканчивать передачу.
@@ -59,16 +78,27 @@ class Bob(EndpointDevice):
             EndpointDevice.MESSAGE_CONNECTION_REMOVE
         )
 
-        self.switching_status = SWITCHING_STATUS_WAITING
-        self.next_connection = self.inputs_ip.index(alice_ip)
+        self.next_connection = self.inputs_ip[alice_ip]
 
         # ждёт конца передачи от Алисы
         # сверяет базисы
         # переключается на другую Алису
         # присылает этой Алисе команду, что пора начинать с ним работу
+        # Алисы присылает в ответ частоту лазера
+        # Боб присылает в ответ, что готов слушать
 
-    def on_message(self, data):
+    def on_message(self, data: bytes):
         ip, data = data
+
+        if data == self.MESSAGE_ALICE_SWITCHED_WITHOUT_CHECKING_BASES:
+            self.reset()
+        elif data == self.MESSAGE_ALICE_LASER_PERIOD:
+            self.current_connection_laser_period = int(
+                data.decode('uft-8').replace(
+                    EndpointDevice.MESSAGE_ALICE_LASER_PERIOD.decode('utf-8'),
+                    ''
+                )
+            )
 
         data: BB84ClassicChannelData = BB84ClassicChannelData.from_json(data.decode('utf-8'))
 

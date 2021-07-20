@@ -201,6 +201,8 @@ class Bridge(Eventable):
         elif header == Bridge.HEADER_CTRL and data[0] == Bridge.LOCK_CTRL_MSG_REQUEST:
             self.send_lock = Bridge.LOCK_FLAG_SENT
 
+        # print(ip, header, data)
+
         try:
             # print(f"SENDING packet from {ip} with data: {header} {data}")
             conn = self.connections[self.dig(ip)]
