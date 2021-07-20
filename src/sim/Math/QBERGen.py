@@ -33,20 +33,22 @@ def simulate_bb84(params: HardwareParams, f_ec: float = 1.2):
     m = 0.2  # среднее число фотонов
     td = 5 * 10 ** -6  # длительность восстановления детектора
     """
+
     s_opt = params.delta_opt * params.fiber_length  # в ДБ степень затухания сигнала
     t = 10 ** (- s_opt / 10)  # Т оптическое, transmission
-    Q = 2 * params.pdc + 1 - math.e ** (-t * params.eff * params.mu)
-    qber = (params.pdc + params.prob_opt * (1 - math.e ** (-t * params.eff * params.mu))) / Q
+    Q = 2 * params.pdc + 1 - math.e ** (-t * params.eff * params.final_mu)
+
+    qber = (params.pdc + params.prob_opt * (1 - math.e ** (-t * params.eff * params.final_mu))) / Q
     r_raw = params.laser_freq * Q / (1 + params.dt * params.laser_freq * Q)
     r_sift = r_raw / 2
 
-    Q1 = Q - 1 + (math.e ** (-params.mu * params.eff) - params.eff * math.e ** (-params.mu)) / max(1 - params.eff, 10e-8)
+    Q1 = Q - 1 + (math.e ** (-params.final_mu * params.eff) - params.eff * math.e ** (-params.final_mu)) / max(1 - params.eff, 10e-8)
 
     E1 = qber * Q / Q1
 
     r_sec = r_sift * (Q1 / Q * (1 - h(E1)) - f_ec * h(qber))
 
-    return r_sift, qber, Q, r_sec
+    return r_sift, qber, Q, r_sec, r_raw
 
 
 if __name__ == "__main__":

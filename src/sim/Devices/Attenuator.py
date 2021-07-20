@@ -11,4 +11,5 @@ class Attenuator(Device):
 
     def process_full(self, wave: Union[Wave, None] = None) -> Union[Wave]:
         wave.mu *= 10 ** (-self.attenuation / 10)
+
         return wave

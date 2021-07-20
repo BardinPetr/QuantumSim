@@ -9,7 +9,7 @@ class HardwareParams:
     polarization: tuple = None
     laser_period: float = 5000
     mu: float = 3 * 10e9
-    attenuation: float = 104.7  # ослабление в дБ
+    attenuation: float = 114.77  # ослабление в дБ
     delta_opt: float = 0.2
     prob_opt: float = 0.05
     pdc: float = 10 ** -6
@@ -20,3 +20,7 @@ class HardwareParams:
     @property
     def laser_freq(self):
         return 1 / self.laser_period
+
+    @property
+    def final_mu(self):
+        return self.mu * 10 ** (-self.attenuation / 10)

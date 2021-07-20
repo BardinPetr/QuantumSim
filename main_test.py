@@ -45,7 +45,7 @@ def main():
     stat.subscribe(Statistics.EVENT_RESULT, sw.write)
     stat.subscribe(Statistics.EVENT_RESULT, stat.log_statistics)
 
-    alice = Alice(hp, classic_channel=cc, session_size=10 ** 4)
+    alice = Alice(hp, classic_channel=cc, session_size=10 ** 6)
     alice.subscribe(EndpointDevice.EVENT_KEY_FINISHED, stat.alice_update)
     alice.subscribe(EndpointDevice.EVENT_KEY_FINISHED, lambda data: km_alice.append(data[0]))
 
