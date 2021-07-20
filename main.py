@@ -22,7 +22,7 @@ def main():
     hp = HardwareParams(
         polarization=(1, 0),
         # laser_period=5000,
-        mu=1,
+        # mu=1,
         # delta_opt=0,
         # prob_opt=0,
         # pdc=10 ** -5,

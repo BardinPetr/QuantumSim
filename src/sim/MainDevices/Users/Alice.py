@@ -1,6 +1,7 @@
 import numpy as np
 
 from src.sim.Data.HardwareParams import HardwareParams
+from src.sim.Devices.Attenuator import Attenuator
 from src.sim.Devices.Clock import Clock
 from src.sim.Devices.HalfWavePlate import HalfWavePlate
 from src.sim.Devices.Laser import Laser
@@ -64,8 +65,11 @@ class Alice(EndpointDevice):
     def gen_optic_scheme(self):
         self.laser = Laser(self.clock, polarization=self.hard_params.polarization, mu=self.hard_params.mu)
 
+        self.attenuator = Attenuator(self.hard_params.attenuation)
+        self.laser.forward_link(self.attenuator)
+
         self.hwp = HalfWavePlate(angle_control_cb=lambda _: np.pi * (self.get_bit() + self.choose_basis()) / 4)
-        self.laser.forward_link(self.hwp)
+        self.attenuator.forward_link(self.hwp)
 
         self.hwp.forward_link(self)
 
