@@ -10,7 +10,6 @@ from src.sim.Clock import Clock
 from src.sim.Wave import Wave
 from src.sim.data.AliceHardwareParams import AliceHardwareParams
 from src.sim.data.BB84ClassicChannelData import BB84ClassicChannelData
-from src.sim.devices.Device import Device
 from src.sim.devices.HalfWavePlate import HalfWavePlate
 from src.sim.devices.Laser import Laser
 from src.sim.devices.users.EndpointDevice import EndpointDevice
@@ -23,13 +22,16 @@ class Alice(EndpointDevice):
                  key_manager: KeyManager,
                  session_size: int = 10 ** 5,
                  name: str = "Alice"):
-        super().__init__(name)
+        super().__init__(bridge, name)
 
         # параметры устройств Алисы
         self.hard_params = params
 
         # часы для работы лазера
         self.clock = Clock(params.laser_period)
+
+        # излучает ли в данный момент Алиса волны
+        self.emit_waves = False
 
         # сгенерированный ключ (до сверки базисов)
         self.base_key = []
@@ -40,43 +42,25 @@ class Alice(EndpointDevice):
         # внешний ip адрес текущего подключения
         self.current_connection: str = None
 
-        # словарь, в котором индексы - внешние ip адреса, а значения - выходы из Алисы
-        self.output_ips = {}
-
-        # излучает ли Алиса волны
-        self.emit_waves = False
-
-        # мост для связи по классическому каналу
-        self.bridge = bridge
-        threading.Thread(target=self.bridge.run, daemon=True).run()
+        # внешний ip адрес следующего подключения
+        self.next_connection: str = None
 
         self.bridge.subscribe(Bridge.EVENT_SOCKET_INCOMING, self.on_message)
 
         # вызов KeyManager, когда ключ завершён и обработан
         self.subscribe(Alice.EVENT_KEY_FINISHED, key_manager.append)
-        self.subscribe(Alice.EVENT_AFTER_FORWARD_LINK, self.device_linked)
+
+        # массив волн для отправки
+        self.wave_send_batch = []
+
+        self.max_wave_send_batch_size = 1000
 
         # создание оптической схемы
         self.gen_optic_scheme()
 
-    def connect_to_bob(self, external_ip: str, port: int):
-        self.bridge.connect(external_ip, port)
-
-    def device_linked(self):
-        # auto discover connected bob external ips
-        for (index, output) in enumerate(self.outputs):
-            current_device: Device = output
-
-            while not isinstance(current_device, EndpointDevice) and len(current_device.inputs) != 1:
-                current_device = list(filter(
-                    lambda x: x != current_device,
-                    current_device.outputs
-                ))[0]
-
-            if len(current_device.inputs) == 1:
-                return
-
-            self.output_ips[current_device.bridge.external_ip] = index
+    def forward_link(self, *devs: EndpointDevice):
+        for dev in devs:
+            self.bridge.connect(dev.bridge.external_ip, dev.bridge.in_port)
 
     def on_message(self, data):
         ip, data = data
@@ -88,19 +72,43 @@ class Alice(EndpointDevice):
                 )
 
             self.emit_waves = False
-        elif data == EndpointDevice.MESSAGE_ALICE_START_SEND_WAVES_REQUEST:
+        elif data == EndpointDevice.MESSAGE_ALICE_LASER_PERIOD_REQUEST:
+            if not self.emit_waves:
+                self.current_connection = ip
+
+                self.bridge.send_data(
+                    ip,
+                    Bridge.HEADER_CLASSIC,
+                    EndpointDevice.MESSAGE_ALICE_LASER_PERIOD_INFO +
+                    int(self.hard_params.laser_period).to_bytes(2, byteorder='big')
+                )
+            else:
+                self.emit_waves = False
+                self.next_connection = ip
+        elif data == EndpointDevice.MESSAGE_BOB_READY_TO_RECEIVE:
             self.emit_waves = True
             self.current_connection = ip
-            threading.Thread(target=self.start, daemon=True).run()
+            threading.Thread(target=self.start, daemon=True).start()
         else:
             data: BB84ClassicChannelData = BB84ClassicChannelData.from_json(data)
 
             key = np.array(self.base_key)[data.save_ids]
             self.save_key(key)
 
+            if self.next_connection is not None:
+                self.current_connection = self.next_connection
+                self.next_connection = None
+
+                self.bridge.send_data(
+                    ip,
+                    Bridge.HEADER_CLASSIC,
+                    EndpointDevice.MESSAGE_ALICE_LASER_PERIOD_INFO +
+                    int(self.hard_params.laser_period).to_bytes(2, byteorder='big')
+                )
+
     def save_key(self, key):
         self.emit(EndpointDevice.EVENT_KEY_FINISHED, key)
-        print(f'alice ({self.uuid}) got key: ', *key[:25], sep='\t')
+        print(f'alice ({self.bridge.external_ip}) got key: ', *key[:25], sep='\t')
 
     def start(self):
         self.base_key = []
@@ -128,7 +136,7 @@ class Alice(EndpointDevice):
         return self.base_key[-1]
 
     def gen_optic_scheme(self):
-        self.laser = Laser(polarization=self.hard_params.polarization, mu=self.hard_params.mu)
+        self.laser = Laser(polarization=self.hard_params.polarization, mu=1000000000)
 
         self.hwp = HalfWavePlate(angle_control_cb=lambda _: np.pi * (self.get_bit() + self.choose_basis()) / 4)
         self.laser.forward_link(self.hwp)
@@ -137,6 +145,14 @@ class Alice(EndpointDevice):
         self.hwp.forward_link(self)
 
     def __call__(self, wave_in: Union[Wave, None] = None):
-        self.outputs[
-            self.output_ips[self.current_connection]
-        ](wave_in)
+        self.wave_send_batch.append(wave_in.to_bin())
+
+        if len(self.wave_send_batch) >= self.max_wave_send_batch_size:
+            self.bridge.send_data(
+                self.current_connection,
+                Bridge.HEADER_CLASSIC,
+                EndpointDevice.MESSAGE_ALICE_WAVES_BATCH +
+                EndpointDevice.QUANTUM_BATCH_SEPARATOR.join(self.wave_send_batch)
+            )
+
+            self.wave_send_batch = []

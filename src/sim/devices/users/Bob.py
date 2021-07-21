@@ -1,5 +1,4 @@
 import math
-import threading
 
 import numpy as np
 from numpy.typing import NDArray
@@ -10,9 +9,7 @@ from src.sim.Wave import Wave
 from src.sim.data.BB84ClassicChannelData import BB84ClassicChannelData
 from src.sim.data.BobHardwareParams import BobHardwareParams
 from src.sim.devices.Detector import Detector
-from src.sim.devices.Device import Device
 from src.sim.devices.HalfWavePlate import HalfWavePlate
-from src.sim.devices.users.Alice import Alice
 from src.sim.devices.users.EndpointDevice import EndpointDevice
 
 
@@ -22,7 +19,7 @@ class Bob(EndpointDevice):
                  bridge: Bridge,
                  key_manager: KeyManager,
                  name: str = "Bob"):
-        super().__init__(name)
+        super().__init__(bridge, name)
 
         # параметры установок Боба
         self.hard_params = params
@@ -30,55 +27,38 @@ class Bob(EndpointDevice):
         # ключ, полученный в процессе генерации (без сверки базисов)
         self.base_key = []
 
-        # период лазера Алисы из текущего подключения
-        self.current_connection: Alice = None
+        # внешний ip адрес текущего подключения
+        self.current_connection: str = None
 
-        # cловарь, где индекс - это номер входа в Боба, а значение - внешний ip Алисы, которая подключена к этому входу
-        self.inputs_ip: dict = {}
+        # внешний ip адрес следующего подключения
+        self.next_connection: str = None
+
+        # период лазера Алисы, к которой сейчас подключен Боб
+        self.current_connection_laser_period: int = None
 
         # время, когда пришёл последний сигнал от Алисы
         self.last_wave_time = 0
-
-        # Алиса, к которой Боб подключится после окончания работы с предыдущей
-        self.next_connection: Alice = None
-
-        # мост для классического канала связи со всеми подключенными Алисами
-        self.bridge = bridge
-        threading.Thread(target=self.bridge.run, daemon=True).run()
 
         self.bridge.subscribe(Bridge.EVENT_SOCKET_INCOMING, self.on_message)
 
         # добавляем ключ в KeyManager, когда он сгенерирован
         self.subscribe(Bob.EVENT_KEY_FINISHED, key_manager.append)
 
-        self.subscribe(Device.EVENT_AFTER_BACK_LINK, self.device_linked)
-
         # генерируем оптическую схему
         self.gen_optic_scheme()
 
-    def device_linked(self):
-        # auto discover connected alice's external ips
-        for (index, inp) in enumerate(self.inputs):
-            current_device: Device = inp
-
-            while not isinstance(current_device, EndpointDevice) and len(current_device.outputs) != 1:
-                current_device = list(filter(
-                    lambda x: x != current_device,
-                    current_device.inputs
-                ))[0]
-
-            if isinstance(current_device, EndpointDevice):
-                self.inputs_ip[current_device.bridge.external_ip] = index
-
     def switch_to_alice(self, alice_ip: str):
         # отправляет текущей Алисе сообщение о том, что пора заканчивать передачу.
-        self.bridge.send_data(
-            alice_ip,
-            Bridge.HEADER_CLASSIC,
-            EndpointDevice.MESSAGE_CONNECTION_REMOVE
-        )
+        if self.current_connection is not None:
+            self.bridge.send_data(
+                self.current_connection,
+                Bridge.HEADER_CLASSIC,
+                EndpointDevice.MESSAGE_CONNECTION_REMOVE
+            )
+        else:
+            self.next_connection = alice_ip
 
-        self.next_connection = self.inputs_ip[alice_ip]
+            self.reset()
 
         # ждёт конца передачи от Алисы
         # сверяет базисы
@@ -92,37 +72,48 @@ class Bob(EndpointDevice):
 
         if data == self.MESSAGE_ALICE_SWITCHED_WITHOUT_CHECKING_BASES:
             self.reset()
-        elif data == self.MESSAGE_ALICE_LASER_PERIOD:
-            self.current_connection_laser_period = int(
-                data.decode('uft-8').replace(
-                    EndpointDevice.MESSAGE_ALICE_LASER_PERIOD.decode('utf-8'),
-                    ''
-                )
+        elif data.startswith(self.MESSAGE_ALICE_LASER_PERIOD_INFO):
+            self.current_connection_laser_period = int.from_bytes(
+                data[EndpointDevice.MESSAGE_TYPE_SIZE:],
+                byteorder='big'
             )
 
-        data: BB84ClassicChannelData = BB84ClassicChannelData.from_json(data.decode('utf-8'))
+            self.last_wave_time = -self.current_connection_laser_period
 
-        self.fix_photon_statistics(len(data.bases) * self.current_connection.hard_params.laser_period)
+            self.bridge.send_data(
+                ip,
+                Bridge.HEADER_CLASSIC,
+                EndpointDevice.MESSAGE_BOB_READY_TO_RECEIVE
+            )
+        elif data.startswith(EndpointDevice.MESSAGE_ALICE_WAVES_BATCH):
+            data = data[EndpointDevice.MESSAGE_TYPE_SIZE:].split(EndpointDevice.QUANTUM_BATCH_SEPARATOR)
 
-        alice_bases = np.array(data.bases, dtype='bool')
-        bob_bases = np.array(self.bases, dtype='bool')
+            for i in data:
+                self(Wave.from_bin(i))
+        else:
+            data: BB84ClassicChannelData = BB84ClassicChannelData.from_json(data.decode('utf-8'))
 
-        same_bases_ids = np.where(alice_bases == bob_bases)[0]
+            self.fix_photon_statistics(len(data.bases) * self.current_connection_laser_period)
 
-        key: NDArray = np.array(self.base_key)[same_bases_ids]
-        ids = np.where(key != 2)
+            alice_bases = np.array(data.bases, dtype='bool')
+            bob_bases = np.array(self.bases, dtype='bool')
 
-        self.save_key(key[ids].astype('bool'))
+            same_bases_ids = np.where(alice_bases == bob_bases)[0]
 
-        self.bridge.send_data(
-            ip,
-            Bridge.HEADER_CLASSIC,
-            BB84ClassicChannelData(
-                save_ids=same_bases_ids[ids].tolist()
-            ).to_json().encode('utf-8')
-        )
+            key: NDArray = np.array(self.base_key)[same_bases_ids]
+            ids = np.where(key != 2)
 
-        self.reset()
+            self.save_key(key[ids].astype('bool'))
+
+            self.bridge.send_data(
+                ip,
+                Bridge.HEADER_CLASSIC,
+                BB84ClassicChannelData(
+                    save_ids=same_bases_ids[ids].tolist()
+                ).to_json().encode('utf-8')
+            )
+
+            self.reset()
 
     def save_key(self, key):
         self.emit(EndpointDevice.EVENT_KEY_FINISHED, key)
@@ -134,15 +125,15 @@ class Bob(EndpointDevice):
             self.next_connection = None
 
             self.bridge.send_data(
-                self.current_connection.bridge.external_ip,
+                self.current_connection,
                 Bridge.HEADER_CLASSIC,
-                EndpointDevice.MESSAGE_ALICE_START_SEND_WAVES_REQUEST
+                EndpointDevice.MESSAGE_ALICE_LASER_PERIOD_REQUEST
             )
 
         self.bases = []
         self.base_key = []
 
-        self.last_wave_time = -self.current_connection.hard_params.laser_period
+        self.last_wave_time = None
 
         self.detector.reset()
 
@@ -160,11 +151,9 @@ class Bob(EndpointDevice):
         self.hwp.forward_link(self.detector)
 
     def fix_photon_statistics(self, time):
-        current_laser_period = self.current_connection.hard_params.laser_period
-
-        if self.last_wave_time < time - current_laser_period:
+        if self.last_wave_time < time - self.current_connection_laser_period:
             missed_count = math.ceil(
-                (time - self.last_wave_time) / current_laser_period
+                (time - self.last_wave_time) / self.current_connection_laser_period
             ) - 1
             self.base_key += [2] * missed_count
 
