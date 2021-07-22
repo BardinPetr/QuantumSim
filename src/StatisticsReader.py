@@ -75,6 +75,8 @@ if __name__ == '__main__':
     practical_data = laser_frequency * q
     theoretical_data = sr.get_theoretical_data(4)
 
+    plt.figure(figsize=(5 * 1.6, 5))
+
     n, bins, patches = plt.hist(practical_data, bins=10, density=True, label='Распределение практического значения')
     plt.axvline(theoretical_data[0], color='r', label='Теоретическое значение')
 
@@ -86,9 +88,11 @@ if __name__ == '__main__':
     # print(np.mean(qbers) - pres(output='qber'))
     # print(np.std(qbers))
 
-    plt.xlabel('QBER')
+    plt.xlabel('R(raw)')
     plt.ylabel('Количество')
 
     plt.legend(loc='upper left', bbox_to_anchor=(0.285, 1.17))
 
-    plt.show()
+    # plt.show()
+
+    plt.savefig('rraw.png', dpi=300)
