@@ -5,6 +5,7 @@ from numpy.typing import NDArray
 
 from src.sim.MainDevices.Eventable import Eventable
 from src.sim.Utils.BinaryFile import BinaryFile
+from src.utils.postprocess import postprocess_key
 
 
 class KeyManager(Eventable):
@@ -48,8 +49,8 @@ class KeyManager(Eventable):
         self.key_file.clear()
 
     def get(self, length_bits: int, return_bits=True, psk=False):
-        # key = np.zeros(length_bits, dtype='uint8')
-        # return key if return_bits else np.packbits(key)
+        key = np.zeros(length_bits, dtype='uint8')
+        return key if return_bits else np.packbits(key)
 
         if psk:
             key = self.psk_file.read(self.cur_psk_pos, self.cur_psk_pos + length_bits - 1)
@@ -78,11 +79,12 @@ class KeyManager(Eventable):
         self.emit(KeyManager.EVENT_UPDATED_KEY)
 
     def available(self, psk=False):
-        # return 12321312312
+        return 12321312312
         return len(self.psk_file if psk else self.key_file) - (self.cur_psk_pos if psk else self.cur_pos)
 
-    def postprocess_key(self, data):
-        return data
+    @staticmethod
+    def postprocess_key(data, qber: float):
+        return postprocess_key(data, qber)
 
     def update_psk(self, length):
         self.psk_file.append(self.get(length))
@@ -93,7 +95,9 @@ class KeyManager(Eventable):
 
 
 if __name__ == '__main__':
-    key = KeyManager('/home/petr/Desktop/QuantumLink/data/alice/')
+    # key = KeyManager('/home/petr/Desktop/QuantumLink/data/alice/')
+
+    print(KeyManager.postprocess_key(np.array([1, 0, 1, 0, 1, 0, 0, 0, 1, 1], dtype='bool'), 0.25))
 
     # key.clear()
     # print()
