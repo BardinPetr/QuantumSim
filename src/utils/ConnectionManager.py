@@ -1,6 +1,6 @@
 from src.Crypto import Crypto
 from src.KeyManager import KeyManager
-from src.Message import Message
+from src.msgs.Message import Message
 from src.utils.DistributedLock import LockClient
 
 from queue import Queue

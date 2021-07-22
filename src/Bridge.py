@@ -3,9 +3,10 @@ import threading
 from os import getcwd
 from socket import create_connection, create_server, socket
 from time import sleep
-from typing import Optional
+from typing import Optional, Any
 
 import networkx as nx
+from matplotlib import pyplot as plt
 from pytun import TunTapDevice, IFF_TUN
 from scapy.layers.inet import IP, TCP
 from scapy.layers.tuntap import LinuxTunPacketInfo
@@ -13,7 +14,8 @@ from scapy.packet import Raw
 from scapy.sendrecv import sniff
 
 from src.KeyManager import KeyManager
-from src.Message import Message
+from src.msgs.Message import Message
+from src.msgs.Payloads import DiscoverMsg
 from src.sim.MainDevices.Eventable import Eventable
 from src.utils.ConnectionManager import ConnectionManager
 from src.utils.DistributedLock import LockServer, LockClient
@@ -167,15 +169,10 @@ class Bridge(Eventable):
         except Exception as ex:
             L.error(ex)
 
-    def _process_incoming_socket(self, conn: socket):
-        data = conn.recv(self.SOCKET_MTU)
-        from_ip = conn.getsockname()[0]
-        if data:
-            msg: Message = Message.deserialize(data, from_ip)
-            print(msg)
-        else:
-            self.selector.unregister(conn)
-            conn.close()
+    def _process_select_events(self):
+        while self.running:
+            for key, mask in self.selector.select():
+                key.data(key.fileobj, mask)
 
     def _process_outgoing_packets(self, conn):
         peer_ip = conn.getpeername()[0]
@@ -184,19 +181,47 @@ class Bridge(Eventable):
             return
         self.get_socket(peer_ip).send(res.serialize())
 
-    def _process_select_events(self):
-        while self.running:
-            for key, mask in self.selector.select():
-                key.data(key.fileobj, mask)
+    def _process_incoming_socket(self, conn: socket):
+        data = conn.recv(self.SOCKET_MTU)
+        from_ip = conn.getpeername()[0]
+        if data:
+            msg: Message = Message.deserialize(data, from_ip)
+            if msg.source_ip == self.ext_ip:
+                return
+            if msg.header_mode == Message.HEADER_DISCOVER:
+                payload: DiscoverMsg = msg.payload
+                self.conn_graph.nodes[msg.source_ip]['int_ip'] = payload.int_ip
+                self.conn_graph.add_edges_from([(msg.source_ip, i) for i in payload.connections])
+
+                nx.draw(self.conn_graph, with_labels=True)
+                plt.show()
+        else:
+            self.selector.unregister(conn)
+            conn.close()
 
     # Low-level sending methods
 
     def send_waves(self, ip: str, waves: bytes):
         self.get_socket(ip, 'w').send(waves)
 
+    def _create_msg(self, peer_ip: str, header: int, payload: Any):
+        return Message(header, self.ext_ip, peer_ip, self.ext_ip, payload)
+
+    def _send_msg(self, peer_ip: str, data: Message):
+        man = self.get_conn_man(peer_ip)
+        # print(peer_ip, data)
+        if man is not None:
+            man.push_outgoing_msg(data)
+
     def send_msg(self, data: Message):
         peer_ip = self.next_hop(data.destination_ip)
-        self.get_conn_man(peer_ip).push_outgoing_msg(data)
+        if peer_ip is None:
+            return False
+        [self._send_msg(i, data) for i in peer_ip if i not in [self.ext_ip, data.from_ip, data.source_ip]]
+
+    def broadcast(self, data: Message):
+        data.destination_ip = Bridge.BROADCAST_IP
+        self.send_msg(data)
 
     # High-level sending methods
 
@@ -205,19 +230,13 @@ class Bridge(Eventable):
                    target_ip=None, source_ip=None):
         pass
 
-    def broadcast(self, header: int, data):
-        return
-        # self.send_data(self.BROADCAST_IP, header, data)
-
     # Auto discovery
-
-    def broadcast_discover(self):
-        pass
 
     def _process_discover(self):
         while self.running:
-            self.broadcast_discover()
-            sleep(10)
+            payload = DiscoverMsg(0, self.tun_ip, self.get_connections_param('ext_ip'))
+            self.broadcast(self._create_msg("", Message.HEADER_DISCOVER, payload))
+            sleep(1)
 
     # Connection graph methods
 
@@ -246,14 +265,17 @@ class Bridge(Eventable):
     def get_node_by_param(self, p_name, p_val):
         return next(filter(lambda x: x[p_name] == p_val, self.conn_graph.nodes))
 
-    def next_hop(self, ip):
+    def next_hop(self, ip) -> list[str]:
+        conns = self.get_connections_param('ext_ip')
+        if ip == Bridge.BROADCAST_IP:
+            return conns
         try:
             path = nx.shortest_path(self.conn_graph, self.ext_ip, ip)
             ip = path[1]
         except:
             pass
-        if ip in self.get_connections_param('ext_ip'):
-            return ip
+        if ip in conns:
+            return [ip]
         return None
 
     # Threading
@@ -290,7 +312,6 @@ def main():
     threading.Thread(target=b0.run, daemon=True).start()
     threading.Thread(target=b1.run, daemon=True).start()
 
-    sleep(1)
     b0.conn_graph.add_edge('0.0.0.0', '127.0.0.1')
     b1.conn_graph.add_edge('0.0.0.0', '127.0.0.1')
     sleep(1)
@@ -298,7 +319,7 @@ def main():
     print("START")
 
     while True:
-        b0.send_msg(Message(11, b0.ext_ip, b1.ext_ip, b0.ext_ip, b'01921084'))
+        # b0.send_msg(Message(11, b0.ext_ip, b1.ext_ip, b0.ext_ip, b'01921084'))
         sleep(1)
 
 
