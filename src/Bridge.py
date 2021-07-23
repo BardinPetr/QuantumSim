@@ -6,7 +6,6 @@ from time import sleep
 from typing import Optional, Any
 
 import networkx as nx
-from matplotlib import pyplot as plt
 from pytun import TunTapDevice, IFF_TUN
 from scapy.layers.inet import IP, TCP
 from scapy.layers.tuntap import LinuxTunPacketInfo
@@ -15,12 +14,13 @@ from scapy.sendrecv import sniff
 
 from src.KeyManager import KeyManager
 from src.msgs.Message import Message
-from src.msgs.Payloads import DiscoverMsg
+from src.msgs.Payloads import DiscoverMsg, CryptMsg
 from src.sim.MainDevices.Eventable import Eventable
 from src.utils.ConnectionManager import ConnectionManager
 from src.utils.DistributedLock import LockServer, LockClient
 
 L.basicConfig(encoding='utf-8', level=L.DEBUG)
+L.getLogger('matplotlib.font_manager').disabled = True
 
 import selectors
 
@@ -84,32 +84,39 @@ class Bridge(Eventable):
         assert (self.PACKET_LENGTH + 20) < self.SOCKET_MTU
         assert (self.TUN_MTU + 20) < self.SOCKET_MTU
 
-    def connect(self, ip: str, key_manager: KeyManager, d_port=None, w_port=None):
+    def connect(self, ip: str, key_manager: KeyManager, d_port=None, w_port=None, dlm_ports=None):
         self.data_conn = create_connection((ip, self.data_port if d_port is None else d_port))
         self.wave_conn = create_connection((ip, self.wave_port if w_port is None else w_port))
-        self.register_connection(ip, key_manager, self.data_conn, self.wave_conn)
+        self.register_connection(ip, key_manager, self.data_conn, self.wave_conn, dlm_ports)
 
     def register_connection(self, ext_ip: str,
                             key_manager: KeyManager = None,
-                            socket_d: socket = None, socket_w: socket = None):
-        if key_manager is not None:
-            dlmc = LockClient((ext_ip if self.user_mode == Bridge.USER_ALICE else self.ext_ip), *self.dlm_ports)
+                            socket_d: socket = None, socket_w: socket = None,
+                            dlm_ports=None):
+        node = self.get_node(ext_ip)
+        if node is None:
             self.conn_graph.add_node(
                 ext_ip,
                 int_ip=None,
-                ext_ip=ext_ip,
-                socket_d=socket_d,
-                socket_w=socket_w,
-                manager=ConnectionManager(key_manager, dlmc)
+                ext_ip=ext_ip
             )
+            self.conn_graph.add_edge(self.ext_ip, ext_ip)
+            node = self.get_node(ext_ip)
+
+        if key_manager is not None:
+            dlm_ports = self.dlm_ports if dlm_ports is None else dlm_ports
+            dlmc = LockClient((ext_ip if self.user_mode == Bridge.USER_ALICE else self.ext_ip), *dlm_ports)
+            cm_identity = ConnectionManager.gen_identity(self.ext_ip, ext_ip)
+            node['manager'] = ConnectionManager(cm_identity, key_manager, dlmc)
+
         if socket_d is not None:
             socket_d.setblocking(False)
-            self.conn_graph.nodes[ext_ip]['socket_d'] = socket_d
+            node['socket_d'] = socket_d
             self.selector.register(socket_d, selectors.EVENT_READ | selectors.EVENT_WRITE,
-                                   self._process_socket)
+                                   lambda *args: self._process_socket(*args, peer_ip=ext_ip))
 
         if socket_w is not None:
-            self.conn_graph.nodes[ext_ip]['socket_w'] = socket_w
+            node['socket_w'] = socket_w
             self.add_thread(self._process_incoming_waves, args=(socket_w,))
 
     def __del__(self):
@@ -148,8 +155,9 @@ class Bridge(Eventable):
         self.tun_sniff = sniff(count=0, iface=self.tun.name, prn=proc)
 
     def _process_accept_socket(self, sock, mask, sock_name):
-        conn, addr = sock.accept()
-        self.register_connection(addr[0], **{sock_name: conn})
+        if mask & selectors.EVENT_READ:
+            conn, addr = sock.accept()
+            self.register_connection(addr[0], **{sock_name: conn})
 
     def _process_incoming_waves(self, conn: socket):
         while self.running:
@@ -160,41 +168,62 @@ class Bridge(Eventable):
             else:
                 conn.close()
 
-    def _process_socket(self, conn: socket, mask):
-        try:
-            if mask & selectors.EVENT_READ:
-                self._process_incoming_socket(conn)
-            if mask & selectors.EVENT_WRITE:
-                self._process_outgoing_packets(conn)
-        except Exception as ex:
-            L.error(ex)
+    def _process_socket(self, conn: socket, mask, peer_ip):
+        # try:
+        if mask & selectors.EVENT_READ:
+            self._process_incoming_socket(conn, peer_ip)
+        if mask & selectors.EVENT_WRITE:
+            self._process_outgoing_packets(conn, peer_ip)
+        # except KeyboardInterrupt as ex:
+        #     L.error(ex)
 
     def _process_select_events(self):
         while self.running:
             for key, mask in self.selector.select():
                 key.data(key.fileobj, mask)
 
-    def _process_outgoing_packets(self, conn):
-        peer_ip = conn.getpeername()[0]
-        res: Optional[Message] = self.get_conn_man(peer_ip).pop_outgoing_msg()
+    def _process_outgoing_packets(self, conn, peer_ip):
+        man = self.get_conn_man(peer_ip)
+        if man is None:
+            return
+        res: Optional[Message] = man.pop_outgoing_msg()
         if res is None:
             return
-        self.get_socket(peer_ip).send(res.serialize())
+        conn.send(res.serialize())
 
-    def _process_incoming_socket(self, conn: socket):
+    def _process_incoming_socket(self, conn: socket, peer_ip):
         data = conn.recv(self.SOCKET_MTU)
-        from_ip = conn.getpeername()[0]
         if data:
-            msg: Message = Message.deserialize(data, from_ip)
+            msg: Optional[Message] = Message.deserialize(data, peer_ip)
+            if msg is None:
+                return
             if msg.source_ip == self.ext_ip:
                 return
+
+            print("recv", msg.source_ip, self.ext_ip, peer_ip, msg.payload)
+
             if msg.header_mode == Message.HEADER_DISCOVER:
                 payload: DiscoverMsg = msg.payload
                 self.conn_graph.nodes[msg.source_ip]['int_ip'] = payload.int_ip
                 self.conn_graph.add_edges_from([(msg.source_ip, i) for i in payload.connections])
+                # L.debug(f"DISCOVERED ON {self.ext_ip} FOR {msg.source_ip} -> {payload.connections}")
+                # nx.draw(self.conn_graph, with_labels=True)
+                # plt.show()
 
-                nx.draw(self.conn_graph, with_labels=True)
-                plt.show()
+            if msg.header_mode == Message.HEADER_CRYPT:
+                man = self.get_conn_man(peer_ip)
+                if man is None:
+                    return
+                if msg.destination_ip != self.ext_ip:
+                    # res = man.re_encrypt(msg,)
+                    pass
+                else:
+                    res = man.decrypt(msg)
+                    print(res)
+
+            if msg.header_mode == Message.HEADER_CLASSIC:
+                pass
+
         else:
             self.selector.unregister(conn)
             conn.close()
@@ -209,7 +238,6 @@ class Bridge(Eventable):
 
     def _send_msg(self, peer_ip: str, data: Message):
         man = self.get_conn_man(peer_ip)
-        # print(peer_ip, data)
         if man is not None:
             man.push_outgoing_msg(data)
 
@@ -225,28 +253,33 @@ class Bridge(Eventable):
 
     # High-level sending methods
 
-    def send_crypt(self, ip: str, data: bytes, mode=None,
-                   crypt_start=0, crypt_end=None,
-                   target_ip=None, source_ip=None):
-        pass
+    def send_crypt(self, peer_ip: str, mode: int, data: bytes, crypt_start: int = 0, crypt_end: int = None):
+        man = self.get_conn_man(peer_ip)
+        if man is None:
+            return
+
+        man.push_outgoing_crypt_msgs([
+            self._create_msg(peer_ip, Message.HEADER_CRYPT, i)
+            for i in man.encrypt_prepare(mode, data, self.ext_ip, crypt_start, crypt_end)
+        ])
 
     # Auto discovery
 
     def _process_discover(self):
         while self.running:
-            payload = DiscoverMsg(0, self.tun_ip, self.get_connections_param('ext_ip'))
+            payload = DiscoverMsg(0, self.tun_ip, self.get_connections_param_map('ext_ip'))
             self.broadcast(self._create_msg("", Message.HEADER_DISCOVER, payload))
-            sleep(1)
+            sleep(10)
 
     # Connection graph methods
 
     def get_conn_man(self, ip) -> ConnectionManager:
         n = self.get_node(ip)
-        return n['manager'] if n is not None else None
+        return n.get('manager', None) if n is not None else None
 
     def get_socket(self, ip, mode='d') -> socket:
         n = self.get_node(ip)
-        return n[f'socket_{mode}'] if n is not None else None
+        return n.get(f'socket_{mode}', None) if n is not None else None
 
     def get_node(self, dst_ip) -> Optional[dict]:
         if dst_ip in self.conn_graph:
@@ -256,17 +289,17 @@ class Bridge(Eventable):
     def get_connections(self, ip=None):
         return [self.get_node(i) for i in self.conn_graph.adj[self.ext_ip if ip is None else ip].keys()]
 
-    def get_connections_param(self, param, ip=None):
-        return [i[param] for i in self.get_connections(ip)]
+    def get_connections_param_map(self, param, ip=None):
+        return [i.get(param, None) for i in self.get_connections(ip)]
 
     def get_connection_by_param(self, p_name, p_val, ip=None):
-        return next(filter(lambda x: x[p_name] == p_val, self.get_connections(ip)))
+        return next(filter(lambda x: x.get(p_name, None) == p_val, self.get_connections(ip)))
 
     def get_node_by_param(self, p_name, p_val):
-        return next(filter(lambda x: x[p_name] == p_val, self.conn_graph.nodes))
+        return next(filter(lambda x: x.get(p_name, None) == p_val, self.conn_graph.nodes))
 
-    def next_hop(self, ip) -> list[str]:
-        conns = self.get_connections_param('ext_ip')
+    def next_hop(self, ip) -> Optional[list[str]]:
+        conns = self.get_connections_param_map('ext_ip')
         if ip == Bridge.BROADCAST_IP:
             return conns
         try:
@@ -286,37 +319,40 @@ class Bridge(Eventable):
         thr.start()
 
     def run(self):
-        for i in [self._process_select_events,
-                  self._process_discover]:
+        for i in [
+            self._process_select_events,
+            # self._process_discover
+        ]:
             self.add_thread(i)
 
 
 def main():
     km0 = KeyManager(directory=f'{getcwd()}/../data/alice')
     b0 = Bridge(
-        '0.0.0.0', '10.10.10.1', '255.255.255.0',
+        '127.0.0.1', '10.10.10.1', '255.255.255.0',
         data_port=58001, wave_port=58002,
-        dlm_ports=(58003, 58004)
+        dlm_ports=(58003, 58004),
+        user_mode=Bridge.USER_ALICE
     )
 
     km1 = KeyManager(directory=f'{getcwd()}/../data/bob')
     b1 = Bridge(
-        '127.0.0.1', '10.10.10.2', '255.255.255.0',
+        '127.0.0.2', '10.10.10.2', '255.255.255.0',
         data_port=59001, wave_port=59002,
-        dlm_ports=(59003, 59004)
+        dlm_ports=(58003, 58004),
+        user_mode=Bridge.USER_BOB
     )
 
-    b0.connect(b1.ext_ip, km0)
+    b0.connect(b1.ext_ip, km0, 59001, 59002)
     b1.register_connection(b0.ext_ip, km1)
 
-    threading.Thread(target=b0.run, daemon=True).start()
-    threading.Thread(target=b1.run, daemon=True).start()
+    b0.run()
+    b1.run()
 
-    b0.conn_graph.add_edge('0.0.0.0', '127.0.0.1')
-    b1.conn_graph.add_edge('0.0.0.0', '127.0.0.1')
     sleep(1)
 
     print("START")
+    b0.send_crypt(b1.ext_ip, CryptMsg.MODE_EVT, b'test', 0, None)
 
     while True:
         # b0.send_msg(Message(11, b0.ext_ip, b1.ext_ip, b0.ext_ip, b'01921084'))

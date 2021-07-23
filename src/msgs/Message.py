@@ -1,11 +1,14 @@
-from typing import Any
+from typing import Any, Optional
 
 from msgpack import packb, unpackb
 
-from src.msgs.Payloads import DiscoverMsg, MsgPayload
+from src.msgs.Payloads import DiscoverMsg, MsgPayload, CryptMsg
 
 
 class Message:
+    MSG_BEGIN = b'msg_bgn'
+    MSG_END = b'msg_end'
+
     MODE_PLAIN = 0
     MODE_TUN = 1
     MODE_SPLIT = 2
@@ -16,7 +19,8 @@ class Message:
     HEADER_DISCOVER = 3
 
     PAYLOAD_CLASSES: dict[int, MsgPayload] = {
-        HEADER_DISCOVER: DiscoverMsg
+        HEADER_DISCOVER: DiscoverMsg,
+        HEADER_CRYPT: CryptMsg
     }
 
     # header_mode: int
@@ -46,11 +50,14 @@ class Message:
         ])
 
     @staticmethod
-    def deserialize(raw: bytes, from_ip: str):
-        mode, s_ip, d_ip, payload = unpackb(raw)
-        if mode in Message.PAYLOAD_CLASSES:
-            payload = Message.PAYLOAD_CLASSES[mode].deserialize(payload)
-        return Message(mode, s_ip, d_ip, from_ip, payload)
+    def deserialize(raw: bytes, from_ip: str) -> Optional['Message']:
+        try:
+            mode, s_ip, d_ip, payload = unpackb(raw)
+            if mode in Message.PAYLOAD_CLASSES:
+                payload = Message.PAYLOAD_CLASSES[mode].deserialize(payload)
+            return Message(mode, s_ip, d_ip, from_ip, payload)
+        except:
+            return None
 
     def __str__(self):
         return f"MSG[ H{self.header_mode} ({self.source_ip}->{self.destination_ip}) {self.payload} ]"
