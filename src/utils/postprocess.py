@@ -47,13 +47,19 @@ def apply_permutations(values: NDArray, permutations: list, dtype: str = 'bool')
     return values
 
 
-def get_error_bits(values, parts_len: int, errors: list, iteration: int):
-    global alice
-
+def get_error_bits(
+        values,
+        parts_len: int,
+        errors: list,
+        iteration: int,
+        send_cascade_data_cb: callable,
+        wait_for_result_cb: callable
+):
     # ищем, в каком из БЛОКОВ у нас допущена ошибка
     parts_parity, parts_indexes = count_parity(values, parts_len, errors)
 
-    alice_parts_parity = alice.get_parity(parts_indexes, iteration)
+    pid = send_cascade_data_cb(iteration, parts_indexes)
+    alice_parts_parity = wait_for_result_cb(pid)
 
     wrong_parts = np.where(alice_parts_parity != parts_parity)[0]
 
@@ -67,7 +73,8 @@ def get_error_bits(values, parts_len: int, errors: list, iteration: int):
 
         middles = np.sum(parts_indexes, axis=1) // 2
 
-        alice_parities = alice.get_parity(np.stack([parts_indexes[:, 0], middles], axis=1), iteration)
+        pid = send_cascade_data_cb(iteration, np.stack([parts_indexes[:, 0], middles], axis=1))
+        alice_parities = wait_for_result_cb(pid)
 
         for i in range(len(alice_parities)):
             parity = np.count_nonzero(values[parts_indexes[i, 0]:middles[i]]) % 2
@@ -88,13 +95,24 @@ def get_error_bits(values, parts_len: int, errors: list, iteration: int):
     return wrong_bit_indexes
 
 
-def postprocess_key(key: NDArray, qber: float):
+def postprocess_key(
+        key: NDArray,
+        qber: float,
+        send_cascade_seed_cb: callable,
+        send_cascade_data_cb: callable,
+        wait_for_result_cb: callable
+):
     data = key.copy().astype('bool')
 
     block_size = max(1, int(0.73 / qber))
 
     max_seed = 2 ** 32 - 1
     seed = random.randint(0, max_seed)
+
+    # отпарвляем сид перестановки Алисе
+    pid = send_cascade_seed_cb(seed)
+
+    time.sleep(5)
 
     np.random.seed(seed)
 
@@ -110,18 +128,17 @@ def postprocess_key(key: NDArray, qber: float):
             )
         )
 
-    # отпарвляем сид перестановки Алисе
-    alice.send_permutations_to_alice(seed)
-
     i = 0
     errors = []
-    i2 = 0
+
+    wait_for_result_cb(pid)
 
     while i < 4:
-        # print(f'iteration #{i}')
-        errors = get_error_bits(data, block_size, errors, i)
+        errors = get_error_bits(data, block_size, errors, i, send_cascade_data_cb, wait_for_result_cb)
 
         data[errors] = ~data[errors]
+
+        print(len(errors))
 
         if len(errors) == 0 or i == 0:
             if i == 3:
@@ -140,37 +157,8 @@ def postprocess_key(key: NDArray, qber: float):
 
             i -= 1
 
-        i2 += 1
-
-    print(i2)
-
     return data
 
 
 def count_qber(key, another_key):
     return np.sum(key != another_key) / len(key)
-
-
-if __name__ == '__main__':
-    qber = 0.05
-    length = 10 ** 7
-
-    key_without_errors = key_gen(length).astype('bool')
-    key_with_errors = key_with_mist_gen(key_without_errors, qber).astype('bool')
-    #                              0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27
-    # key_with_errors =    np.array([0, 0, 0, 0, 0, 0, 1, 1], dtype='bool')
-    # key_without_errors = np.array([0, 0, 0, 1, 0, 0, 1, 0], dtype='bool')
-
-    print('errors count:', np.sum(key_with_errors != key_without_errors))
-    print('qber:', count_qber(key_with_errors, key_without_errors))
-
-    alice = Bridge(key_without_errors.copy())
-
-    t = time.time()
-    corrected_key = postprocess_key(key_with_errors, qber)
-    print(time.time() - t)
-
-    print('errors count:', np.sum(corrected_key != alice.key_after_iterations[-1]))
-    print('qber:', np.sum(corrected_key != alice.key_after_iterations[-1]) / len(corrected_key))
-
-    print('leaked bits:', alice.leaked_bits_count)

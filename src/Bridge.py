@@ -9,11 +9,6 @@ from uuid import uuid4
 
 import networkx as nx
 from numpy.typing import NDArray
-from pytun import TunTapDevice, IFF_TUN
-from scapy.layers.inet import IP, TCP
-from scapy.layers.tuntap import LinuxTunPacketInfo
-from scapy.packet import Raw
-from scapy.sendrecv import sniff
 
 from src.KeyManager import KeyManager
 from src.msgs.Message import Message
@@ -23,10 +18,8 @@ from src.sim.Math.QBERGen import key_gen, key_with_mist_gen
 from src.utils.ConnectionManager import ConnectionManager
 from src.utils.DistributedLock import LockServer, LockClient
 
-L.basicConfig(encoding='utf-8', level=L.DEBUG)
+L.basicConfig(encoding='utf-8', level=L.INFO)
 L.getLogger('matplotlib.font_manager').disabled = True
-
-import selectors
 
 
 class Bridge(Eventable):
@@ -66,9 +59,20 @@ class Bridge(Eventable):
         self.data_port = data_port
         self.wave_port = wave_port
 
-        self.tun_ip = tun_ip
-        self.tun = TunTapDevice(flags=IFF_TUN)
-        self.tun_up(tun_ip, tun_netmask)
+        self.is_tun_enabled = True
+        try:
+            from pytun import TunTapDevice, IFF_TUN
+            from scapy.layers.inet import IP, TCP
+            from scapy.layers.tuntap import LinuxTunPacketInfo
+            from scapy.packet import Raw
+            from scapy.sendrecv import sniff
+        except ImportError:
+            self.is_tun_enabled = False
+
+        if self.is_tun_enabled:
+            self.tun_ip = tun_ip
+            self.tun = TunTapDevice(flags=IFF_TUN)
+            self.tun_up(tun_ip, tun_netmask)
 
         self.dlm_server = None
         self.dlm_ports = dlm_ports
@@ -200,7 +204,7 @@ class Bridge(Eventable):
         res: Optional[Message] = man.pop_outgoing_msg()
         if res is None:
             return
-        print(f"SEND {res}")
+        # print(f"SEND {res}")
         conn.send(res.serialize())
 
     def _process_incoming_socket(self, conn: socket, peer_ip):
@@ -252,7 +256,7 @@ class Bridge(Eventable):
                               on_response=lambda x: self._send_rpc_resp(msg.source_ip,
                                                                         payload.proc_name,
                                                                         payload.req_id,
-                                                                        payload.data),
+                                                                        x),
                               threaded=True)
                 else:
                     self.set_proc_result(payload.req_id, payload.data)
@@ -331,12 +335,15 @@ class Bridge(Eventable):
         return {
             'send_cascade_seed': lambda a: self.send_cascade_seed(ip, a),
             'send_cascade_data': lambda *args: self.send_cascade_data(ip, *args),
-            'wait_for_result':   self.wait_for_result
+            'wait_for_result': self.wait_for_result
         }
 
     # Auto discovery
 
     def _process_discover(self):
+        if not self.is_tun_enabled:
+            return
+
         while self.running:
             payload = DiscoverMsg(0, self.tun_ip, self.get_connections_param_map('ext_ip'))
             self.broadcast(self._create_msg("", Message.HEADER_DISCOVER, payload))
@@ -397,7 +404,7 @@ class Bridge(Eventable):
     def run(self):
         for i in [
             self._process_select_events,
-            # self._process_discover
+            self._process_discover
         ]:
             self.add_thread(i)
 
@@ -428,8 +435,18 @@ def main():
     b0.run()
     b1.run()
 
+    sleep(1)
+
+    length = 10 ** 4 + 8
+    qber = 0.05
+
+    key_without_errors = key_gen(length)
+    key_with_errors = key_with_mist_gen(key_without_errors, qber)
+
     km0.append(key_without_errors)
     km1.append(key_with_errors)
+
+    print('successful!')
 
     while True:
         sleep(1)

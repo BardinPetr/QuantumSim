@@ -1,6 +1,7 @@
 import os
 
 import numpy as np
+import queue
 from numpy.typing import NDArray
 
 from src.sim.MainDevices.Eventable import Eventable
@@ -38,6 +39,8 @@ class KeyManager(Eventable):
 
         self.cur_pos, self.cur_psk_pos = self.load_cur_pos()
 
+        self.key = queue.Queue()
+
         self.leaked_bits_count = 0
         self.permutations = []
         self.key_after_iterations = []
@@ -51,10 +54,12 @@ class KeyManager(Eventable):
         for begin, end in indexes:
             parities.append(np.count_nonzero(self.key_after_iterations[iteration][begin:end]) % 2)
 
+        # print('alice', parities)
+
         return parities
 
     def update_permutations(self, seed):
-        key = self.key.pop()
+        key = self.key.get()
 
         np.random.seed(seed)
 
@@ -65,7 +70,7 @@ class KeyManager(Eventable):
 
             self.key_after_iterations.append(apply_permutations(key, self.permutations))
 
-        self.key_file.append(key)
+        self.key_file.append(self.key_after_iterations[-1])
 
     def calc_qber(self):
         return 0.05
@@ -121,7 +126,7 @@ class KeyManager(Eventable):
                             )
                         )
                     else:
-                        self.key.append(key_part[i:i + self.KEY_FRAME_SIZE])
+                        self.key.put(key_part[i:i + self.KEY_FRAME_SIZE])
                 else:
                     self.temp_key_file.append(key_part[i:])
                     break
