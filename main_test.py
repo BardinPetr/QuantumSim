@@ -1,15 +1,15 @@
 import os
 import threading
 
-from src.KeyManager import KeyManager
-from src.StatWriter import StatWriter
+from src.crypto.KeyManager import KeyManager
+from src.statistics.StatWriter import StatWriter
 from src.sim.Data.HardwareParams import HardwareParams
-from src.sim.Devices.OpticFiber import OpticFiber
+from src.sim.devices.OpticFiber import OpticFiber
 from src.sim.MainDevices.ClassicChannel import ClassicChannel
-from src.sim.MainDevices.EndpointDevice import EndpointDevice
-from src.sim.MainDevices.Users.Alice import Alice
-from src.sim.MainDevices.Users.Bob import Bob
-from src.sim.Math.Statistics import Statistics
+from src.sim.devices.users.EndpointDevice import EndpointDevice
+from src.sim.devices.users.Alice import Alice
+from src.sim.devices.users.Bob import Bob
+from src.statistics.Statistics import Statistics
 
 
 def main():

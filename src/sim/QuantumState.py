@@ -3,7 +3,7 @@ from typing import Union, List, Tuple
 import numpy as np
 from numpy.typing import NDArray
 
-from src.utils.rand import *
+from src.math.rand import *
 
 BASIS_VERTICAL = np.array([0, 1])
 BASIS_HORIZONTAL = np.array([1, 0])

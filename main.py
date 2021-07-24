@@ -2,22 +2,22 @@ import os
 import threading
 
 from PIL import Image
-
-from src.Bridge import Bridge
-from src.Crypto import Crypto
-from src.KeyManager import KeyManager
-from src.StatWriter import StatWriter
-from src.sim.Data.HardwareParams import HardwareParams
-from src.sim.Devices.OpticFiber import OpticFiber
 from src.sim.MainDevices.ClassicChannel import ClassicChannel
-from src.sim.MainDevices.EndpointDevice import EndpointDevice
-from src.sim.MainDevices.Users.Alice import Alice
-from src.sim.MainDevices.Users.Bob import Bob
-from src.sim.Math.Statistics import Statistics
+
+from src.connections.Bridge import Bridge
+from src.crypto.Crypto import Crypto
+from src.crypto.KeyManager import KeyManager
+from src.sim.data.HardwareParams import HardwareParams
+from src.sim.devices.OpticFiber import OpticFiber
+from src.sim.devices.users.Alice import Alice
+from src.sim.devices.users.Bob import Bob
+from src.sim.devices.users.EndpointDevice import EndpointDevice
+from src.statistics.StatisticsWriter import StatisticsWriter
 
 i = 1
 
 
+# TODO: replace classic channel with Bridge
 def main():
     hp = HardwareParams(
         polarization=(1, 0),
@@ -31,7 +31,7 @@ def main():
         # fiber_length=50
     )
 
-    sw = StatWriter(f'{os.getcwd()}/data/statistics.json')
+    sw = StatisticsWriter(f'{os.getcwd()}/data/statistics.json')
 
     km_alice = KeyManager(directory=f'{os.getcwd()}/data/alice')
     alice_c = Crypto(km_alice)
