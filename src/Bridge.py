@@ -1,4 +1,5 @@
 import logging as L
+import selectors
 import threading
 from os import getcwd
 from socket import create_connection, create_server, socket
@@ -7,6 +8,7 @@ from typing import Optional, Any, Union
 from uuid import uuid4
 
 import networkx as nx
+from numpy.typing import NDArray
 from pytun import TunTapDevice, IFF_TUN
 from scapy.layers.inet import IP, TCP
 from scapy.layers.tuntap import LinuxTunPacketInfo
@@ -17,6 +19,7 @@ from src.KeyManager import KeyManager
 from src.msgs.Message import Message
 from src.msgs.Payloads import DiscoverMsg, CryptMsg, RPCMsg
 from src.sim.MainDevices.Eventable import Eventable
+from src.sim.Math.QBERGen import key_gen, key_with_mist_gen
 from src.utils.ConnectionManager import ConnectionManager
 from src.utils.DistributedLock import LockServer, LockClient
 
@@ -115,6 +118,7 @@ class Bridge(Eventable):
                               *dlm_ports,
                               identity=ext_ip)
             node['manager'] = ConnectionManager(self.ext_ip, ext_ip, key_manager, dlmc)
+            node['manager'].set_bridge_methods(self)
 
         if socket_d is not None:
             socket_d.setblocking(False)
@@ -320,8 +324,15 @@ class Bridge(Eventable):
     def send_cascade_seed(self, ip, seed):
         return self.call_rpc(ip, RPCMsg.CASCADE_SEED, seed)
 
-    def send_cascade_data(self, ip, idx, data):
-        return self.call_rpc(ip, RPCMsg.CASCADE_REQUEST, [idx, data])
+    def send_cascade_data(self, ip, idx, data: NDArray):
+        return self.call_rpc(ip, RPCMsg.CASCADE_REQUEST, [idx, data.tolist()])
+
+    def get_cascade_funcs(self, ip):
+        return {
+            'send_cascade_seed': lambda a: self.send_cascade_seed(ip, a),
+            'send_cascade_data': lambda *args: self.send_cascade_data(ip, *args),
+            'wait_for_result':   self.wait_for_result
+        }
 
     # Auto discovery
 
@@ -386,7 +397,7 @@ class Bridge(Eventable):
     def run(self):
         for i in [
             self._process_select_events,
-            self._process_discover
+            # self._process_discover
         ]:
             self.add_thread(i)
 
@@ -400,9 +411,9 @@ def main():
         user_mode=Bridge.USER_ALICE
     )
     b0.subscribe(Bridge.EVENT_INCOMING_CRYPT, lambda x: print(x))
-    b0.subscribe(Bridge.EVENT_INCOMING_WAVES, lambda x: print("W", x))
+    # b0.subscribe(Bridge.EVENT_INCOMING_WAVES, lambda x: print("W", x))
 
-    km1 = KeyManager(directory=f'{getcwd()}/../data/bob')
+    km1 = KeyManager(directory=f'{getcwd()}/../data/bob', is_bob=True)
     b1 = Bridge(
         '127.0.0.2', '10.10.10.2', '255.255.255.0',
         data_port=59001, wave_port=59002,
@@ -414,27 +425,13 @@ def main():
     b0.connect(b1.ext_ip, km0, 59001, 59002)
     b1.register_connection(b0.ext_ip, km1)
 
-    def proc(x):
-        sleep(10)
-        print("@")
-        return x
-
-    b0.subscribe('0', proc)
-
     b0.run()
     b1.run()
 
-    sleep(0)
-
-    print("START")
-    # b0.send_crypt(b1.ext_ip, CryptMsg.MODE_EVT, b'test', 0, None)
-    # sleep(10)
-    # b1.send_crypt(b0.ext_ip, CryptMsg.MODE_EVT, b'asdf', 0, None)
-    # pid = b1.call_rpc(b0.ext_ip, '0', '!')
-    # res = b1.wait_for_result(pid)
+    km0.append(key_without_errors)
+    km1.append(key_with_errors)
 
     while True:
-        # b0.send_msg(Message(11, b0.ext_ip, b1.ext_ip, b0.ext_ip, b'01921084'))
         sleep(1)
 
 

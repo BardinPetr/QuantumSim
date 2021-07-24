@@ -5,7 +5,7 @@ from numpy.typing import NDArray
 
 from src.sim.MainDevices.Eventable import Eventable
 from src.sim.Utils.BinaryFile import BinaryFile
-from src.utils.postprocess import postprocess_key
+from src.utils.postprocess import postprocess_key, apply_permutations
 
 
 class KeyManager(Eventable):
@@ -17,12 +17,13 @@ class KeyManager(Eventable):
     PSK_PATH: str = 'psk'
     CTRL_PATH = 'ctrl'
 
-    KEY_FRAME_SIZE = 1024
-    KEY_BLOCK_SIZE = 1024
+    KEY_FRAME_SIZE = 10 ** 4
     PSK_SIZE = 5000
 
-    def __init__(self, directory: str):
+    def __init__(self, directory: str, is_bob=False):
         super().__init__()
+        self.is_bob = is_bob
+
         # files
         self.key_file = BinaryFile(path=os.path.join(directory, self.KEY_PATH))
         self.temp_key_file = BinaryFile(path=os.path.join(directory, self.TEMP_KEY_PATH))
@@ -30,10 +31,47 @@ class KeyManager(Eventable):
         # self.psk_path = os.path.join(directory, self.PSK_PATH)
         self.ctrl_path = os.path.join(directory, self.CTRL_PATH)
 
+        self.bridge_methods = {}
+
         if not os.path.isfile(self.ctrl_path) or os.path.getsize(self.ctrl_path) == 0:
             self.save_cur_pos(0, 0)
 
         self.cur_pos, self.cur_psk_pos = self.load_cur_pos()
+
+        self.leaked_bits_count = 0
+        self.permutations = []
+        self.key_after_iterations = []
+
+    def get_parity(self, data):
+        iteration, indexes = data[0], np.array(data[1])
+
+        self.leaked_bits_count += 1
+
+        parities = []
+        for begin, end in indexes:
+            parities.append(np.count_nonzero(self.key_after_iterations[iteration][begin:end]) % 2)
+
+        return parities
+
+    def update_permutations(self, seed):
+        key = self.key.pop()
+
+        np.random.seed(seed)
+
+        self.key_after_iterations.append(key)
+
+        for i in range(3):
+            self.permutations.append(np.random.permutation(len(key)))
+
+            self.key_after_iterations.append(apply_permutations(key, self.permutations))
+
+        self.key_file.append(key)
+
+    def calc_qber(self):
+        return 0.05
+
+    def set_bridge_methods(self, cb: dict):
+        self.bridge_methods = cb
 
     def load_cur_pos(self):
         with open(self.ctrl_path, 'r+') as f:
@@ -49,8 +87,8 @@ class KeyManager(Eventable):
         self.key_file.clear()
 
     def get(self, length_bits: int, return_bits=True, psk=False):
-        key = np.zeros(length_bits, dtype='uint8')
-        return key if return_bits else np.packbits(key)
+        # key = np.zeros(length_bits, dtype='uint8')
+        # return key if return_bits else np.packbits(key)
 
         if psk:
             key = self.psk_file.read(self.cur_psk_pos, self.cur_psk_pos + length_bits - 1)
@@ -72,19 +110,26 @@ class KeyManager(Eventable):
             self.temp_key_file.clear()
             for i in range(0, len(key_part), self.KEY_FRAME_SIZE):
                 if i + self.KEY_FRAME_SIZE <= len(key_part):
-                    self.key_file.append(self.postprocess_key(key_part[i:i + self.KEY_FRAME_SIZE]))
+                    if self.is_bob:
+                        self.key_file.append(
+                            postprocess_key(
+                                key_part[i:i + self.KEY_FRAME_SIZE],
+                                self.calc_qber(),
+                                self.bridge_methods['send_cascade_seed'],
+                                self.bridge_methods['send_cascade_data'],
+                                self.bridge_methods['wait_for_result']
+                            )
+                        )
+                    else:
+                        self.key.append(key_part[i:i + self.KEY_FRAME_SIZE])
                 else:
                     self.temp_key_file.append(key_part[i:])
                     break
         self.emit(KeyManager.EVENT_UPDATED_KEY)
 
     def available(self, psk=False):
-        return 12321312312
+        # return 12321312312
         return len(self.psk_file if psk else self.key_file) - (self.cur_psk_pos if psk else self.cur_pos)
-
-    @staticmethod
-    def postprocess_key(data, qber: float):
-        return postprocess_key(data, qber)
 
     def update_psk(self, length):
         self.psk_file.append(self.get(length))
@@ -95,9 +140,7 @@ class KeyManager(Eventable):
 
 
 if __name__ == '__main__':
-    # key = KeyManager('/home/petr/Desktop/QuantumLink/data/alice/')
-
-    print(KeyManager.postprocess_key(np.array([1, 0, 1, 0, 1, 0, 0, 0, 1, 1], dtype='bool'), 0.25))
+    key = KeyManager('/home/petr/Desktop/QuantumLink/data/alice/')
 
     # key.clear()
     # print()

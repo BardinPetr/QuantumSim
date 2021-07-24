@@ -47,56 +47,6 @@ class ClassicMsg(MsgPayload):
         return DiscoverMsg(*unpackb(raw))
 
 
-class CascadeMsg(MsgPayload):
-    MODE_SEED = 0
-    MODE_CALL = 1
-    MODE_CALL_RESP = 2
-
-    mode: int
-
-    seed: int = None
-
-    cur_id: int = None
-    req: list[tuple[int, int]] = None
-
-    res: list[int] = None
-
-    def __init__(self, mode: int,
-                 seed: int = None,
-                 cur_id: int = None, req: list[tuple[int, int]] = None,
-                 res: list[int] = None):
-        self.mode = mode
-        self.seed = seed
-        self.cur_id = cur_id
-        self.req = req
-        self.res = res
-
-    @staticmethod
-    def from_seed(seed):
-        return CascadeMsg(mode=CascadeMsg.MODE_SEED, seed=seed)
-
-    @staticmethod
-    def from_req(cur_id, req):
-        return CascadeMsg(mode=CascadeMsg.MODE_CALL, cur_id=cur_id, req=req)
-
-    @staticmethod
-    def from_res(res):
-        return CascadeMsg(mode=CascadeMsg.MODE_CALL_RESP, res=res)
-
-    def serialize(self) -> bytes:
-        if self.mode == CascadeMsg.MODE_SEED:
-            data = self.seed
-        elif self.mode == CascadeMsg.MODE_CALL:
-            data = []
-        return packb([self.mode, data])
-
-    @staticmethod
-    def deserialize(raw: bytes) -> 'CascadeMsg':
-        mode, data = unpackb(raw)
-        if mode == CascadeMsg.MODE_SEED:
-            return
-
-
 class RPCMsg(MsgPayload):
     CASCADE_SEED = 'cascade_set_seed'
     CASCADE_REQUEST = 'cascade_request'
@@ -118,6 +68,9 @@ class RPCMsg(MsgPayload):
     @staticmethod
     def deserialize(raw: bytes):
         return RPCMsg(*unpackb(raw))
+
+    def __str__(self):
+        return f'RPCCALL[ {self.data} ]'
 
 
 class CryptMsg(MsgPayload):

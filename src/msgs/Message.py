@@ -2,7 +2,7 @@ from typing import Any, Optional
 
 from msgpack import packb, unpackb
 
-from src.msgs.Payloads import DiscoverMsg, MsgPayload, CryptMsg, CascadeMsg, RPCMsg
+from src.msgs.Payloads import DiscoverMsg, MsgPayload, CryptMsg, RPCMsg
 
 
 class Message:
@@ -16,8 +16,8 @@ class Message:
 
     PAYLOAD_CLASSES: dict[int, MsgPayload] = {
         HEADER_DISCOVER: DiscoverMsg,
-        HEADER_RPC: RPCMsg,
-        HEADER_CRYPT: CryptMsg,
+        HEADER_RPC:      RPCMsg,
+        HEADER_CRYPT:    CryptMsg,
     }
 
     header_mode: int

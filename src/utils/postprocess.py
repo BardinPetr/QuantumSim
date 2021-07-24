@@ -7,34 +7,7 @@ from numpy.typing import NDArray
 from src.sim.Math.QBERGen import *
 
 
-class Bridge:
-    def __init__(self, key: NDArray):
-        self.leaked_bits_count = 0
-        self.permutations = []
-        self.key_after_iterations = []
-        self.key = key
-
-    def send_permutations_to_alice(self, start_permutation_seed: int):
-        np.random.seed(start_permutation_seed)
-
-        self.key_after_iterations.append(self.key)
-
-        for i in range(3):
-            self.permutations.append(np.random.permutation(len(self.key)))
-
-            self.key_after_iterations.append(apply_permutations(self.key, self.permutations))
-
-    def get_parity(self, indexes: list, iteration):
-        self.leaked_bits_count += 1
-
-        parities = []
-        for begin, end in indexes:
-            parities.append(np.count_nonzero(self.key_after_iterations[iteration][begin:end]) % 2)
-
-        return parities
-
-
-def count_parity(values, part_len: int, errors: list):  # 0.04
+def count_parity(values, part_len: int, errors: list):
     size = len(values)
     part_count = math.ceil(size / part_len)
 
