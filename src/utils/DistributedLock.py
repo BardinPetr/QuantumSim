@@ -29,11 +29,15 @@ class LockServer:
             data = self.rep.recv_json()
             name, idx = data['name'], data['id']
             if data['mode'] == 1:  # acquire
-                self.locks[name] = self.locks.get(name, []) + [idx]
+                self.locks[name] = self.locks.get(name, [])
+                if idx not in self.locks[name]:
+                    self.locks[name].append(idx)
                 if len(self.locks[name]) == 1:
                     self.rep.send_json({'mode': LockServer.STATE_ACC})
+                    # print(f"Acquired for {name}")
                     continue
-            elif name in self.locks:  # release
+            elif name in self.locks and len(self.locks[name]) > 0:  # release
+                # print(f"Sended release {name}  {self.locks}")
                 self.locks[name].pop(0)
                 if len(self.locks[name]) > 0:
                     self.pub.send_json({'name': name, 'id': self.locks[name][0]})
@@ -42,9 +46,10 @@ class LockServer:
 
 
 class LockClient:
-    def __init__(self, ip, pub_port=9990, rep_port=9991):
+    def __init__(self, ip, pub_port=9990, rep_port=9991, identity=None):
         self.running = True
         self.acquired = set()
+        self.identity = str(id(self)) if identity is None else identity
 
         cnt = zmq.Context()
         self.req = cnt.socket(zmq.REQ)
@@ -56,22 +61,18 @@ class LockClient:
         self.thread = Thread(target=self._run, daemon=True)
         self.thread.start()
 
-    @property
-    def id(self):
-        return str(id(self))
-
     def __del__(self):
         self.running = False
 
     def _run(self):
         while self.running:
             update = self.sub.recv_json()
-            if update['name'] in self.acquired and update['id'] == self.id:
+            if update['name'] in self.acquired and update['id'] == self.identity:
                 self.acquired.remove(update['name'])
 
-    def _request(self, state, name) -> bytes:
+    def _request(self, state, name, ident=None) -> bytes:
         self.req.send_json({
-            'id':   self.id,
+            'id':   self.identity if ident is None else ident,
             'name': name,
             'mode': state
         })
@@ -82,6 +83,7 @@ class LockClient:
         resp = self._request(LockServer.STATE_ACC, name)
         self.acquired.add(name)
         if resp == LockServer.STATE_ACC:  # acquired
+            # print("!", name)
             return True
         while name in self.acquired:
             if timeout is not None and (time.time() - t_start) > timeout:
@@ -91,6 +93,10 @@ class LockClient:
 
     def release(self, name):
         self._request(LockServer.STATE_REL, name)
+
+    def release_other(self, name, ident):
+        # print(name, ident)
+        self._request(LockServer.STATE_REL, name, ident)
 
 
 if __name__ == "__main__":

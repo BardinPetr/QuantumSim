@@ -9,8 +9,11 @@ from src.utils.DistributedLock import LockClient
 
 
 class ConnectionManager:
-    def __init__(self, identity: str, key_manager: KeyManager, dlmc: LockClient):
-        self.identity = identity
+    def __init__(self, local_ip, peer_ip, key_manager: KeyManager, dlmc: LockClient):
+        self.local_ip = local_ip
+        self.peer_ip = peer_ip
+        self.identity = self.gen_identity(local_ip, peer_ip)
+
         self.km = key_manager
         self.crypt = Crypto(self.km)
         self.dlmc = dlmc
@@ -23,6 +26,9 @@ class ConnectionManager:
     @staticmethod
     def gen_identity(ip_a: str, ip_b: str) -> str:
         return str(int.from_bytes(ip_a.encode('utf-8'), 'big') + int.from_bytes(ip_b.encode('utf-8'), 'big'))
+
+    def release_peer(self):
+        self.dlmc.release_other(self.identity, self.peer_ip)
 
     def pop_outgoing_msg(self):
         res = None
@@ -41,13 +47,12 @@ class ConnectionManager:
 
     def _process_out_msg(self, msg: Message):
         if msg.header_mode == Message.HEADER_CRYPT:
-            self.dlmc.acquire(self.identity)
-            if self.crypt.km.available() < (msg.payload.crypt_end - msg.payload.crypt_start):
+            acc_res = self.dlmc.acquire(self.identity, timeout=0.0001)
+            if not acc_res or self.crypt.km.available() < 8 * (msg.payload.crypt_end - msg.payload.crypt_start):
                 return None
             msg.payload.data = self.crypt.encrypt(msg.payload.data,
                                                   crypt_start=msg.payload.crypt_start,
                                                   crypt_end=msg.payload.crypt_end)
-            self.dlmc.release(self.identity)
 
         return msg
 
@@ -59,8 +64,8 @@ class ConnectionManager:
         self.send_queue.append(msg)
 
     @staticmethod
-    def encrypt_prepare(mode: int, data: bytes, encryptor: str, crypt_start: int = 0, crypt_end: int = None) -> list[
-        MsgPayload]:
+    def encrypt_prepare(mode: int, data: bytes, encryptor: str,
+                        crypt_start: int = 0, crypt_end: int = None) -> list[MsgPayload]:
         crypt_end = len(data) if crypt_end is None else crypt_end
 
         pkts = list(enumerate(range(0, len(data), CryptMsg.PACKET_LENGTH)))
@@ -83,21 +88,21 @@ class ConnectionManager:
             res.append(CryptMsg(mode, cur_cs, cur_ce, index, len(pkts), data[start_byte:end_byte], encryptor))
         return res
 
-    def re_encrypt(self, msg: Message, base_cm: 'ConnectionManager'):
-        pass
-
-    def decrypt(self, msg: Message):
+    def decrypt(self, msg: Message, force=False):
         msg.payload.data = self.crypt.decrypt(msg.payload.data,
                                               crypt_start=msg.payload.crypt_start,
                                               crypt_end=msg.payload.crypt_end)
+        self.release_peer()
+
         payload: CryptMsg = msg.payload
 
         self.split_msg_buffer[payload.packet_index] = payload.data
 
-        if len(self.split_msg_buffer) == payload.packets_full_cnt:
+        if force or len(self.split_msg_buffer) == payload.packets_full_cnt:
             res = bytes(reduce(lambda acc, i: acc + i[1],
                                sorted(self.split_msg_buffer.items(), key=lambda x: x[0]),
                                bytearray()))
             self.split_msg_buffer = dict()
-            return res
+            msg.payload.data = res
+            return res, msg
         return None

@@ -1,11 +1,11 @@
-from queue import Queue
 from threading import Thread
-from typing import Optional
+from time import sleep
 
 
 class Eventable:
     def __init__(self):
         self.events = dict()
+        self.event_results = dict()
 
     def subscribe(self, eid, cb):
         if eid not in self.events:
@@ -17,24 +17,25 @@ class Eventable:
     def unsubscribe(self, eid, cb_id):
         del self.events[eid][cb_id]
 
-    def _emit(self, wait_response, queue: Optional[Queue], eid, *args):
+    def _emit(self, on_response, eid, *args):
         for i in self.events.get(eid, {}).values():
-            if wait_response:
-                res = i(*args)
-                if queue is not None:
-                    queue.put(res)
-                else:
-                    return res
-            else:
-                i(*args)
+            res = i(*args)
+            if on_response is not None:
+                on_response(res)
 
-    def emit(self, eid, *args, wait_response=False, threaded=False):
+    def emit(self, eid, *args, on_response=None, threaded=False):
         if threaded:
-            q = Queue()
-            thread = Thread(target=self._emit, args=(wait_response, q, eid, *args), daemon=True)
+            thread = Thread(target=self._emit, args=(on_response, eid, *args), daemon=True)
             thread.start()
-            if wait_response:
-                thread.join()
-                return q.get(timeout=0.1)
         else:
-            return self._emit(wait_response, None, eid, *args)
+            self._emit(on_response, eid, *args)
+
+    def set_proc_result(self, pid, res):
+        self.event_results[pid] = res
+
+    def wait_for_result(self, pid):
+        while pid not in self.event_results:
+            sleep(0.0001)
+        res = self.event_results[pid]
+        del self.event_results[pid]
+        return res
