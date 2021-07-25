@@ -1,32 +1,31 @@
 from collections import deque
 from functools import reduce
 
+from src.connections.DistributedLock import LockClient
 from src.crypto.Crypto import Crypto
 from src.crypto.KeyManager import KeyManager
 from src.messages.Message import Message
-from src.messages.Payloads import CryptMsg, MsgPayload, RPCMsg
-from src.connections.DistributedLock import LockClient
+from src.messages.Payloads import CryptMsg, MsgPayload
 
 
 class ConnectionManager:
-    def __init__(self, local_ip, peer_ip, key_manager: KeyManager, dlmc: LockClient):
+    def __init__(self, local_ip, peer_ip, kwm: KeyManager, dlmc: LockClient):
         self.local_ip = local_ip
         self.peer_ip = peer_ip
         self.identity = self.gen_identity(local_ip, peer_ip)
 
-        self.km = key_manager
-        self.crypt = Crypto(self.km)
         self.dlmc = dlmc
+        self.km = kwm
+
+        self.crypt = Crypto(self.km)
 
         self.send_queue = deque()
         self.crypto_queue = deque()
 
         self.split_msg_buffer = dict()
 
-    def set_bridge_methods(self, bridge):
-        self.km.set_bridge_methods(bridge.get_cascade_funcs(self.peer_ip))
-        bridge.subscribe(RPCMsg.CASCADE_SEED, self.km.update_permutations)
-        bridge.subscribe(RPCMsg.CASCADE_REQUEST, self.km.get_parity)
+    def set_bridge(self, bridge):
+        self.km.set_bridge(bridge, self.peer_ip)
 
     @staticmethod
     def gen_identity(ip_a: str, ip_b: str) -> str:

@@ -6,7 +6,6 @@ from src.connections.Bridge import Bridge
 from src.crypto.KeyManager import KeyManager
 from src.math.QBERGen import key_gen, key_with_mist_gen
 from src.sim.data.HardwareParams import HardwareParams
-from src.sim.devices.OpticFiber import OpticFiber
 from src.sim.devices.users.Alice import Alice
 from src.sim.devices.users.Bob import Bob
 from src.sim.devices.users.EndpointDevice import EndpointDevice
@@ -21,8 +20,7 @@ def main():
         dlm_ports=(58003, 58004),
         user_mode=Bridge.USER_ALICE
     )
-    b0.subscribe(Bridge.EVENT_INCOMING_CRYPT, lambda x: print(x))
-    # b0.subscribe(Bridge.EVENT_INCOMING_WAVES, lambda x: print("W", x))
+    b0.subscribe(Bridge.EVENT_INCOMING_CRYPT, lambda x: print("GOT", x))
 
     km1 = KeyManager(directory=f'{getcwd()}/data/bob', is_bob=True)
     b1 = Bridge(
@@ -31,7 +29,7 @@ def main():
         dlm_ports=(58003, 58004),
         user_mode=Bridge.USER_BOB
     )
-    b1.subscribe(Bridge.EVENT_INCOMING_CRYPT, lambda x: print(x))
+    b1.subscribe(Bridge.EVENT_INCOMING_CRYPT, lambda x: print("GOT", x))
 
     b0.connect(b1.ext_ip, km0, 59001, 59002)
     b1.register_connection(b0.ext_ip, km1)
@@ -59,7 +57,7 @@ def main():
     bob.subscribe(EndpointDevice.EVENT_KEY_FINISHED, lambda data: km1.append(data[0]))
     bob.bind_bridge(b0.ext_ip, b1)
 
-    threading.Thread(target=lambda: alice.start(progress_bar=True), daemon=True).run()
+    threading.Thread(target=lambda: alice.start(progress_bar=False), daemon=True).run()
 
     sleep(1)
 

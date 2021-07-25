@@ -34,9 +34,6 @@ class Bridge(Eventable):
         Message.HEADER_CLASSIC: EVENT_INCOMING_CLASSIC
     }
 
-    EVENT_PROC_CASCADE_SEED = 'casc_s'
-    EVENT_PROC_CASCADE_CALL = 'casc_c'
-
     WAVES_BATCH_SEPARATOR = b'\xba\xc4'
 
     USER_ALICE = 0
@@ -126,7 +123,7 @@ class Bridge(Eventable):
                               *dlm_ports,
                               identity=ext_ip)
             node['manager'] = ConnectionManager(self.ext_ip, ext_ip, key_manager, dlmc)
-            node['manager'].set_bridge_methods(self)
+            node['manager'].set_bridge(self)
 
         if socket_d is not None:
             socket_d.setblocking(False)
@@ -196,7 +193,7 @@ class Bridge(Eventable):
                 self._process_incoming_socket(conn, peer_ip)
             if mask & selectors.EVENT_WRITE:
                 self._process_outgoing_packets(conn, peer_ip)
-        except Exception as ex:
+        except KeyboardInterrupt as ex:
             L.error(ex)
 
     def _process_select_events(self):
@@ -357,6 +354,7 @@ class Bridge(Eventable):
         return {
             'send_cascade_seed': lambda a: self.send_cascade_seed(ip, a),
             'send_cascade_data': lambda *args: self.send_cascade_data(ip, *args),
+            'call_rpc':          lambda *args: self.call_rpc(ip, *args),
             'wait_for_result':   self.wait_for_result
         }
 

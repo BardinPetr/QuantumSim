@@ -62,7 +62,6 @@ class Alice(EndpointDevice):
 
             self.check_bases()
             self.is_bob_received_all_waves = False
-            return
 
     def check_bases(self):
         self.send_classic_bind(self.bases, 0)
