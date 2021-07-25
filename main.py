@@ -54,15 +54,11 @@ def main():
     alice.subscribe(EndpointDevice.EVENT_KEY_FINISHED, lambda data: km0.append(data[0]))
     alice.bind_bridge(b1.ext_ip, b0)
 
-    of = OpticFiber(length=hp.fiber_length, deltaopt=hp.delta_opt, probopt=hp.prob_opt)
-    alice.forward_link(of)
-
-    bob = Bob(hp)
+    bob = Bob(hp, session_size=10 ** 2)
     bob.subscribe(EndpointDevice.EVENT_KEY_FINISHED, stat.bob_update)
     bob.subscribe(EndpointDevice.EVENT_KEY_FINISHED, lambda data: km1.append(data[0]))
     bob.bind_bridge(b0.ext_ip, b1)
 
-    of.forward_link(bob)
     threading.Thread(target=lambda: alice.start(progress_bar=True), daemon=True).run()
 
     sleep(1)

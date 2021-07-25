@@ -3,6 +3,7 @@ import math
 import numpy as np
 from numpy.typing import NDArray
 
+from src.connections.Bridge import Bridge
 from src.messages.Message import Message
 from src.sim.QuantumState import BASIS_HV
 from src.sim.Wave import Wave
@@ -18,9 +19,11 @@ class Bob(EndpointDevice):
     def __init__(self,
                  params: HardwareParams,
                  read_basis: NDArray = BASIS_HV,
+                 session_size: int = 10 ** 5,
                  name: str = "Bob"):
         super().__init__(params, name)
 
+        self.session_size = session_size
         self.read_basis = read_basis
 
         self.base_key = []
@@ -29,13 +32,27 @@ class Bob(EndpointDevice):
 
         self.gen_optic_scheme()
 
+    def on_waves_recv(self, msgs: bytes):
+        msgs = msgs.split(Bridge.WAVES_BATCH_SEPARATOR)
+
+        for msg in msgs:
+            self(Wave.from_bin(msg))
+
+        print(len(self.bases))
+
+        if len(self.bases) == self.session_size:
+            self.send_classic_bind([], 2)
+
     def on_classic_recv(self, msg: Message):
         if msg.payload.mode == 1:
             return
+
         self.fix_photon_statistics(len(msg.payload.data) * self.hard_params.laser_period)
 
         alice_bases = np.array(msg.payload.data, dtype='bool')
         bob_bases = np.array(self.bases, dtype='bool')
+
+        print(len(alice_bases), len(bob_bases))
 
         same_bases_ids = np.where(alice_bases == bob_bases)[0]
 
@@ -78,6 +95,7 @@ class Bob(EndpointDevice):
         self.fix_photon_statistics(wave.time)
 
         state = wave.state.read(self.read_basis)
+
         self.base_key.append(state[1])
 
         self.last_wave_time = wave.time

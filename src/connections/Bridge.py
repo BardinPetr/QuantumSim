@@ -1,7 +1,6 @@
 import logging as L
 import selectors
 import threading
-from os import getcwd
 from socket import create_connection, create_server, socket
 from time import sleep
 from typing import Optional, Any, Union
@@ -18,15 +17,8 @@ from src.Eventable import Eventable
 from src.connections.ConnectionManager import ConnectionManager
 from src.connections.DistributedLock import LockServer, LockClient
 from src.crypto.KeyManager import KeyManager
-from src.math.QBERGen import key_gen, key_with_mist_gen
 from src.messages.Message import Message
 from src.messages.Payloads import CryptMsg, DiscoverMsg, RPCMsg, ClassicMsg
-from src.sim.data.HardwareParams import HardwareParams
-from src.sim.devices.OpticFiber import OpticFiber
-from src.sim.devices.users.Alice import Alice
-from src.sim.devices.users.Bob import Bob
-from src.sim.devices.users.EndpointDevice import EndpointDevice
-from src.statistics.StatisticsAggregator import StatisticsAggregator
 
 L.basicConfig(encoding='utf-8', level=L.DEBUG)
 L.getLogger('matplotlib.font_manager').disabled = True
@@ -44,6 +36,8 @@ class Bridge(Eventable):
 
     EVENT_PROC_CASCADE_SEED = 'casc_s'
     EVENT_PROC_CASCADE_CALL = 'casc_c'
+
+    WAVES_BATCH_SEPARATOR = b'\xba\xc4'
 
     USER_ALICE = 0
     USER_BOB = 1
@@ -148,7 +142,6 @@ class Bridge(Eventable):
         self.running = False
 
         try:
-            self.tun.down()
             self.tun.close()
         except:
             pass
@@ -165,9 +158,13 @@ class Bridge(Eventable):
         self.tun.netmask = netmask
         self.tun.mtu = self.TUN_MTU
         self.tun.up()
+        # self.tun.config(ip=ip, mask=netmask)
         self.add_thread(self._process_incoming_tunnel)
 
     def _process_incoming_tunnel(self):
+        if not self.is_tun_enabled:
+            return
+
         def proc(x):
             if x.haslayer(TCP):
                 try:
@@ -287,10 +284,10 @@ class Bridge(Eventable):
 
     # Low-level sending methods
 
-    def send_waves(self, ip: str, waves: bytes):
+    def send_waves(self, ip: str, waves: [bytes]):
         s = self.get_socket(ip, 'w')
         if s is not None:
-            s.send(waves)
+            s.send(Bridge.WAVES_BATCH_SEPARATOR.join(waves))
 
     def _create_msg(self, dest_ip: str, header: int, payload: Any):
         return Message(header, self.ext_ip, dest_ip, self.ext_ip, payload)
@@ -432,4 +429,3 @@ class Bridge(Eventable):
             self._process_discover
         ]:
             self.add_thread(i)
-

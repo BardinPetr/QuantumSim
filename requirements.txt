@@ -2,7 +2,7 @@ numpy~=1.21.0
 matplotlib~=3.4.2
 tqdm~=4.61.2
 dataclasses_json
-python-pytun
+python-pytuntap
 pyroute2
 pandas~=1.3.0
 scipy~=1.7.0
