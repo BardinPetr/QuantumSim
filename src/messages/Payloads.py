@@ -93,6 +93,7 @@ class CryptMsg(MsgPayload):
     packets_full_cnt: int
     encryptor: str
     data: bytes
+    start_key_pos: int
 
     def __init__(self, mode: int,
                  crypt_start: int,
@@ -100,12 +101,14 @@ class CryptMsg(MsgPayload):
                  packet_index: int,
                  packets_full_cnt: int,
                  data: bytes,
+                 start_key_pos: int = -1,
                  encryptor: str = None):
         self.mode = mode
         self.crypt_start = crypt_start
         self.crypt_end = crypt_end
         self.packet_index = packet_index
         self.packets_full_cnt = packets_full_cnt
+        self.start_key_pos = start_key_pos
         self.encryptor = encryptor
         self.data = data
 
@@ -113,7 +116,8 @@ class CryptMsg(MsgPayload):
         return packb([self.mode,
                       self.crypt_start, self.crypt_end,
                       self.packet_index, self.packets_full_cnt,
-                      self.data])
+                      self.data,
+                      self.start_key_pos])
 
     @staticmethod
     def deserialize(raw: bytes):

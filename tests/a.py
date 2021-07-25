@@ -1,9 +1,8 @@
 from os import getcwd
 from time import sleep
 
-from src.Bridge import Bridge
-from src.KeyManager import KeyManager
-from src.msgs.Payloads import CryptMsg
+from src.connections.Bridge import Bridge
+from src.crypto.KeyManager import KeyManager
 
 km0 = KeyManager(directory=f'{getcwd()}/../data/alice')
 b0 = Bridge(

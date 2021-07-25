@@ -28,7 +28,6 @@ class Alice(EndpointDevice):
 
         self.session_size = session_size
 
-        # массив волн для отправки
         self.wave_send_batch = []
         self.max_wave_send_batch_size = 50
 

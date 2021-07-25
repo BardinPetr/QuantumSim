@@ -72,7 +72,7 @@ class KeyManager(Eventable):
         for i in range(3):
             self.permutations.append(np.random.permutation(len(key)))
 
-            self.key_after_iterations.append(apply_permutations(key, self.permutations))
+            self.key_after_iterations.append(self.postproc.apply_permutations(key, self.permutations))
 
         self.key_file.append(self.key_after_iterations[-1])
 
