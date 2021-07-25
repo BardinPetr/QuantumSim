@@ -54,8 +54,6 @@ class KeyManager(Eventable):
         for begin, end in indexes:
             parities.append(np.count_nonzero(self.key_after_iterations[iteration][begin:end]) % 2)
 
-        # print('alice', parities)
-
         return parities
 
     def update_permutations(self, seed):

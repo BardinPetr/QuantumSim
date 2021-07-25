@@ -35,16 +35,22 @@ class DiscoverMsg(MsgPayload):
 
 
 class ClassicMsg(MsgPayload):
+    mode: int
+    data: list[int]
 
-    def __init__(self):
-        pass
+    def __init__(self, mode: int, data: list[int]):
+        self.mode = mode
+        self.data = data
 
     def serialize(self) -> bytes:
-        return packb([])
+        return packb([self.mode, self.data])
 
     @staticmethod
     def deserialize(raw: bytes):
-        return DiscoverMsg(*unpackb(raw))
+        return ClassicMsg(*unpackb(raw))
+
+    def __str__(self):
+        return f'CLASSICMSG{self.mode}[ {self.data} ]'
 
 
 class RPCMsg(MsgPayload):

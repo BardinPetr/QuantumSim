@@ -9,16 +9,26 @@ from uuid import uuid4
 
 import networkx as nx
 from numpy.typing import NDArray
+from scapy.layers.inet import IP, TCP
+from scapy.layers.tuntap import LinuxTunPacketInfo
+from scapy.packet import Raw
+from scapy.sendrecv import sniff
 
-from src.crypto.KeyManager import KeyManager
-from src.messages.Message import Message
-from src.messages.Payloads import DiscoverMsg, CryptMsg, RPCMsg
 from src.Eventable import Eventable
-from src.math.QBERGen import key_gen, key_with_mist_gen
 from src.connections.ConnectionManager import ConnectionManager
 from src.connections.DistributedLock import LockServer, LockClient
+from src.crypto.KeyManager import KeyManager
+from src.math.QBERGen import key_gen, key_with_mist_gen
+from src.messages.Message import Message
+from src.messages.Payloads import CryptMsg, DiscoverMsg, RPCMsg, ClassicMsg
+from src.sim.data.HardwareParams import HardwareParams
+from src.sim.devices.OpticFiber import OpticFiber
+from src.sim.devices.users.Alice import Alice
+from src.sim.devices.users.Bob import Bob
+from src.sim.devices.users.EndpointDevice import EndpointDevice
+from src.statistics.StatisticsAggregator import StatisticsAggregator
 
-L.basicConfig(encoding='utf-8', level=L.INFO)
+L.basicConfig(encoding='utf-8', level=L.DEBUG)
 L.getLogger('matplotlib.font_manager').disabled = True
 
 
@@ -27,6 +37,10 @@ class Bridge(Eventable):
     EVENT_INCOMING_WAVES = 'inc_waves'
     EVENT_INCOMING_CRYPT = 'inc_crypt'
     EVENT_INCOMING_CLASSIC = 'inc_classic'
+
+    EVENT_BY_HEADER = {
+        Message.HEADER_CLASSIC: EVENT_INCOMING_CLASSIC
+    }
 
     EVENT_PROC_CASCADE_SEED = 'casc_s'
     EVENT_PROC_CASCADE_CALL = 'casc_c'
@@ -62,10 +76,6 @@ class Bridge(Eventable):
         self.is_tun_enabled = True
         try:
             from pytun import TunTapDevice, IFF_TUN
-            from scapy.layers.inet import IP, TCP
-            from scapy.layers.tuntap import LinuxTunPacketInfo
-            from scapy.packet import Raw
-            from scapy.sendrecv import sniff
         except ImportError:
             self.is_tun_enabled = False
 
@@ -204,8 +214,11 @@ class Bridge(Eventable):
         res: Optional[Message] = man.pop_outgoing_msg()
         if res is None:
             return
-        # print(f"SEND {res}")
-        conn.send(res.serialize())
+        print(f"SEND {res}")
+        raw = res.serialize()
+        if res.header_mode == Message.HEADER_CLASSIC:
+            raw = man.crypt.sign(raw)
+        conn.send(raw)
 
     def _process_incoming_socket(self, conn: socket, peer_ip):
         data = conn.recv(self.SOCKET_MTU)
@@ -216,13 +229,13 @@ class Bridge(Eventable):
             if msg.source_ip == self.ext_ip:
                 return
 
+            man = self.get_conn_man(peer_ip)
+            if man is None:
+                return
+
             L.debug(f"Received {msg}")
 
             if msg.header_mode == Message.HEADER_CRYPT:
-                man = self.get_conn_man(peer_ip)
-                if man is None:
-                    return
-
                 if msg.destination_ip == self.ext_ip:
                     res, new_msg = man.decrypt(msg)
                     if msg.payload.mode == CryptMsg.MODE_EVT:
@@ -234,7 +247,7 @@ class Bridge(Eventable):
                     self.send_crypt_msgs_pack([new_msg])
                 return
 
-            if msg.header_mode == Message.HEADER_DISCOVER:
+            elif msg.header_mode == Message.HEADER_DISCOVER:
                 payload: DiscoverMsg = msg.payload
                 self.conn_graph.add_node(msg.source_ip,
                                          ext_ip=msg.source_ip,
@@ -260,6 +273,14 @@ class Bridge(Eventable):
                               threaded=True)
                 else:
                     self.set_proc_result(payload.req_id, payload.data)
+
+            if msg.header_mode == Message.HEADER_CLASSIC:
+                if not man.crypt.verify(data):
+                    print("FAILED")
+                    return
+
+            if msg.header_mode in Bridge.EVENT_BY_HEADER:
+                self.emit(Bridge.EVENT_BY_HEADER[msg.header_mode], msg)
         else:
             self.selector.unregister(conn)
             conn.close()
@@ -313,6 +334,10 @@ class Bridge(Eventable):
             for i in man.encrypt_prepare(mode, data, self.ext_ip, crypt_start, crypt_end)
         ])
 
+    def send_classic(self, dest_ip: str, data: list[int], mode=0):
+        self.send_msg(self._create_msg(dest_ip, Message.HEADER_CLASSIC,
+                                       ClassicMsg(mode, data)))
+
     # RPC
 
     def call_rpc(self, ip, p_name, data):
@@ -335,7 +360,7 @@ class Bridge(Eventable):
         return {
             'send_cascade_seed': lambda a: self.send_cascade_seed(ip, a),
             'send_cascade_data': lambda *args: self.send_cascade_data(ip, *args),
-            'wait_for_result': self.wait_for_result
+            'wait_for_result':   self.wait_for_result
         }
 
     # Auto discovery
@@ -434,6 +459,32 @@ def main():
 
     b0.run()
     b1.run()
+
+    # Optics
+    hp = HardwareParams(
+        polarization=(1, 0),
+        attenuation=0,
+        delta_opt=0
+    )
+
+    stat = StatisticsAggregator(hp)
+    stat.subscribe(StatisticsAggregator.EVENT_RESULT, stat.log_statistics)
+
+    alice = Alice(hp, session_size=10 ** 2)
+    alice.subscribe(EndpointDevice.EVENT_KEY_FINISHED, stat.alice_update)
+    alice.subscribe(EndpointDevice.EVENT_KEY_FINISHED, lambda data: km0.append(data[0]))
+    alice.bind_bridge(b1.ext_ip, b0)
+
+    of = OpticFiber(length=hp.fiber_length, deltaopt=hp.delta_opt, probopt=hp.prob_opt)
+    alice.forward_link(of)
+
+    bob = Bob(hp)
+    bob.subscribe(EndpointDevice.EVENT_KEY_FINISHED, stat.bob_update)
+    bob.subscribe(EndpointDevice.EVENT_KEY_FINISHED, lambda data: km1.append(data[0]))
+    bob.bind_bridge(b0.ext_ip, b1)
+
+    of.forward_link(bob)
+    threading.Thread(target=lambda: alice.start(progress_bar=True), daemon=True).run()
 
     sleep(1)
 

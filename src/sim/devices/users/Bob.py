@@ -2,22 +2,21 @@ import math
 
 import numpy as np
 from numpy.typing import NDArray
-from src.sim.MainDevices.ClassicChannel import ClassicChannel
 
+from src.messages.Message import Message
 from src.sim.QuantumState import BASIS_HV
 from src.sim.Wave import Wave
-from src.sim.data.BB84ClassicChannelData import BB84ClassicChannelData
 from src.sim.data.HardwareParams import HardwareParams
 from src.sim.devices.Detector import Detector
 from src.sim.devices.HalfWavePlate import HalfWavePlate
 from src.sim.devices.users.EndpointDevice import EndpointDevice
 
 
-# TODO: replace classic channel with Bridge
 class Bob(EndpointDevice):
+    ACTION_SEND_BRIDGE_CLASSIC = 'a_evt_bridge_cls'
+
     def __init__(self,
                  params: HardwareParams,
-                 classic_channel: ClassicChannel,
                  read_basis: NDArray = BASIS_HV,
                  name: str = "Bob"):
         super().__init__(params, name)
@@ -28,19 +27,14 @@ class Bob(EndpointDevice):
         self.last_wave_time = -params.laser_period
         self.received_waves_count = 0
 
-        self.classic_channel = classic_channel
-        self.classic_channel.subscribe(ClassicChannel.EVENT_ON_RECV, self.on_classic_recv)
-
         self.gen_optic_scheme()
 
-    def on_classic_recv(self, data: bytes):
-        data: BB84ClassicChannelData = BB84ClassicChannelData.from_json(data.decode())
-        if data.message_type == 1:
+    def on_classic_recv(self, msg: Message):
+        if msg.payload.mode == 1:
             return
+        self.fix_photon_statistics(len(msg.payload.data) * self.hard_params.laser_period)
 
-        self.fix_photon_statistics(len(data.bases) * self.hard_params.laser_period)
-
-        alice_bases = np.array(data.bases, dtype='bool')
+        alice_bases = np.array(msg.payload.data, dtype='bool')
         bob_bases = np.array(self.bases, dtype='bool')
 
         same_bases_ids = np.where(alice_bases == bob_bases)[0]
@@ -50,12 +44,7 @@ class Bob(EndpointDevice):
 
         self.save_key(key[ids].astype('bool'))
 
-        self.classic_channel.send(
-            BB84ClassicChannelData(
-                message_type=1,
-                save_ids=same_bases_ids[ids].tolist()
-            ).to_json().encode('utf-8')
-        )
+        self.send_classic_bind(same_bases_ids[ids].tolist(), 1)
 
         self.bases = []
         self.base_key = []

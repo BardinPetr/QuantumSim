@@ -1,6 +1,7 @@
+from src.math.rand import rand_bin
+from src.messages.Payloads import ClassicMsg
 from src.sim.data.HardwareParams import HardwareParams
 from src.sim.devices.Device import Device
-from src.math.rand import rand_bin
 
 
 class EndpointDevice(Device):
@@ -10,6 +11,14 @@ class EndpointDevice(Device):
         super().__init__(name)
         self.hard_params = params
         self.bases = []
+        self.send_classic_bind = None
+
+    def on_classic_recv(self, msg: ClassicMsg):
+        pass
+
+    def bind_bridge(self, peer_ip: str, bridge: 'Bridge'):
+        bridge.subscribe(bridge.EVENT_INCOMING_CLASSIC, self.on_classic_recv)
+        self.send_classic_bind = lambda data, mode: bridge.send_classic(peer_ip, data, mode)
 
     def choose_basis(self):
         basis = 0.5 if rand_bin() else 0
