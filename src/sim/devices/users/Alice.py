@@ -18,7 +18,7 @@ from src.sim.devices.users.EndpointDevice import EndpointDevice
 class Alice(EndpointDevice):
     def __init__(self,
                  params: HardwareParams,
-                 session_size: int = 10 ** 2,
+                 session_size: int = 10 ** 3,
                  name: str = "Alice"):
         super().__init__(params, name)
 
@@ -29,18 +29,22 @@ class Alice(EndpointDevice):
         self.session_size = session_size
 
         self.wave_send_batch = []
-        self.max_wave_send_batch_size = 50
+        self.max_wave_send_batch_size = 1000
 
         self.gen_optic_scheme()
 
         self.is_bob_received_all_waves = False
+        self.is_bob_processed_all_waves = False
 
     def on_classic_recv(self, msg: Message):
-        if msg.payload.mode == 2:
-            self.is_bob_received_all_waves = True
-        elif msg.payload.mode == 1:
+        if msg.payload.mode == 1:
             key = np.array(self.base_key)[msg.payload.data]
             self.save_key(key)
+
+            self.is_bob_processed_all_waves = True
+
+        elif msg.payload.mode == 2:
+            self.is_bob_received_all_waves = True
 
     def save_key(self, key):
         self.emit(EndpointDevice.EVENT_KEY_FINISHED, (key, self.session_size))
@@ -64,6 +68,11 @@ class Alice(EndpointDevice):
 
     def check_bases(self):
         self.send_classic_bind(self.bases, 0)
+
+        while not self.is_bob_processed_all_waves:
+            time.sleep(1e-3)
+
+        self.is_bob_processed_all_waves = False
 
     def get_bit(self):
         self.base_key.append(rand_bin())
@@ -93,6 +102,5 @@ class Alice(EndpointDevice):
     def __call__(self, wave_in: Union[Wave, None] = None):
         self.wave_send_batch.append(wave_in.to_bin())
 
-        # print(len(self.wave_send_batch))
         if len(self.wave_send_batch) >= self.max_wave_send_batch_size:
             self.send_waves_to_bob()

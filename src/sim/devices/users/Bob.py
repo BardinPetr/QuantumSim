@@ -1,4 +1,5 @@
 import math
+import time
 
 import numpy as np
 from numpy.typing import NDArray
@@ -32,27 +33,31 @@ class Bob(EndpointDevice):
 
         self.gen_optic_scheme()
 
+        self.processing_waves_batch = False
+
     def on_waves_recv(self, msgs: bytes):
-        msgs = msgs.split(Bridge.WAVES_BATCH_SEPARATOR)
+        while self.processing_waves_batch:
+            time.sleep(1e-3)
 
-        for msg in msgs:
-            self(Wave.from_bin(msg))
+        self.processing_waves_batch = True
 
-        print(len(self.bases))
+        size = Wave.get_struct_size()
+        for i in range(0, len(msgs), size):
+            self(Wave.from_bin(msgs[i:i + size]))
 
         if len(self.bases) == self.session_size:
             self.send_classic_bind([], 2)
 
+        self.processing_waves_batch = False
+
     def on_classic_recv(self, msg: Message):
-        if msg.payload.mode == 1:
-            return
+        # if msg.payload.mode == 1:
+        #     return
 
         self.fix_photon_statistics(len(msg.payload.data) * self.hard_params.laser_period)
 
         alice_bases = np.array(msg.payload.data, dtype='bool')
         bob_bases = np.array(self.bases, dtype='bool')
-
-        print(len(alice_bases), len(bob_bases))
 
         same_bases_ids = np.where(alice_bases == bob_bases)[0]
 
@@ -61,13 +66,13 @@ class Bob(EndpointDevice):
 
         self.save_key(key[ids].astype('bool'))
 
-        self.send_classic_bind(same_bases_ids[ids].tolist(), 1)
-
         self.bases = []
         self.base_key = []
         self.last_wave_time = -self.hard_params.laser_period
         self.received_waves_count = 0
         self.detector.reset()
+
+        self.send_classic_bind(same_bases_ids[ids].tolist(), 1)
 
     def save_key(self, key):
         self.emit(EndpointDevice.EVENT_KEY_FINISHED, (key, self.received_waves_count))

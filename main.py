@@ -40,35 +40,24 @@ def main():
     # Optics
     hp = HardwareParams(
         polarization=(1, 0),
-        attenuation=0,
-        delta_opt=0
     )
+
+    session_size = 10 ** 4
 
     stat = StatisticsAggregator(hp)
     stat.subscribe(StatisticsAggregator.EVENT_RESULT, stat.log_statistics)
 
-    alice = Alice(hp, session_size=10 ** 2)
+    alice = Alice(hp, session_size=session_size)
     alice.subscribe(EndpointDevice.EVENT_KEY_FINISHED, stat.alice_update)
     alice.subscribe(EndpointDevice.EVENT_KEY_FINISHED, lambda data: km0.append(data[0]))
     alice.bind_bridge(b1.ext_ip, b0)
 
-    bob = Bob(hp, session_size=10 ** 2)
+    bob = Bob(hp, session_size=session_size)
     bob.subscribe(EndpointDevice.EVENT_KEY_FINISHED, stat.bob_update)
     bob.subscribe(EndpointDevice.EVENT_KEY_FINISHED, lambda data: km1.append(data[0]))
     bob.bind_bridge(b0.ext_ip, b1)
 
     threading.Thread(target=lambda: alice.start(progress_bar=False), daemon=True).run()
-
-    sleep(1)
-
-    length = 10 ** 4 + 8
-    qber = 0.05
-
-    key_without_errors = key_gen(length)
-    key_with_errors = key_with_mist_gen(key_without_errors, qber)
-
-    km0.append(key_without_errors)
-    km1.append(key_with_errors)
 
     print('successful!')
 

@@ -54,6 +54,9 @@ class StatisticsAggregator(Eventable):
         self.check()
 
     def count_qber(self):
+        if len(self.alice_key) == 0:
+            return 0
+
         return np.sum(self.alice_key != self.bob_key) / len(self.alice_key)
 
     @staticmethod

@@ -131,7 +131,7 @@ class Postprocessing:
     def postprocess_key(self, key: NDArray):
         self.key = key
 
-        print('here')
+        # print('here')
 
         if self.is_alice:
             while not self.is_bob_process_key:

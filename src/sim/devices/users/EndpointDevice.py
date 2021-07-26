@@ -27,7 +27,8 @@ class EndpointDevice(Device):
         self.send_waves_bind = lambda data: bridge.send_waves(peer_ip, data)
 
     def choose_basis(self):
-        basis = 0.5 if rand_bin() else 0
+        # basis = 0.5 if rand_bin() else 0
+        basis = 0
         self.bases.append(bool(basis))
 
         return basis

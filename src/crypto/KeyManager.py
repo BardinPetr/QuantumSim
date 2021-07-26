@@ -121,7 +121,8 @@ class KeyManager(Eventable):
     def append(self, key: NDArray):
         self.temp_key_file.append(key)
 
-        if len(self.temp_key_file) > self.KEY_FRAME_SIZE:
+        if False:
+        # if len(self.temp_key_file) > self.KEY_FRAME_SIZE:
             key_part = self.temp_key_file.read_all()
             self.temp_key_file.clear()
             for i in range(0, len(key_part), self.KEY_FRAME_SIZE):
