@@ -4,6 +4,7 @@ from typing import Optional
 
 import numpy as np
 from numpy.typing import NDArray
+from scipy.linalg import matmul_toeplitz
 
 from src.Eventable import Eventable
 from src.crypto.Postprocessing import Postprocessing
@@ -18,7 +19,7 @@ class KeyManager(Eventable):
     KEY_PATH: str = 'key'
     TEMP_KEY_PATH: str = 'temp_key'
     PSK_PATH: str = 'psk'
-    TOEPLITZ_PATH: str = 'psk'
+    TOEPLITZ_PATH: str = 'toeplitz'
     CTRL_PATH = 'ctrl'
 
     KEY_FRAME_SIZE = 10 ** 2
@@ -29,12 +30,17 @@ class KeyManager(Eventable):
         self.is_bob = is_bob
 
         # files
+        self.directory = directory
+        self.toeplitz_path = os.path.join(directory, self.TOEPLITZ_PATH)
         self.key_file = BinaryFile(path=os.path.join(directory, self.KEY_PATH))
         self.temp_key_file = BinaryFile(path=os.path.join(directory, self.TEMP_KEY_PATH))
         self.psk_file = BinaryFile(path=os.path.join(directory, self.PSK_PATH))
         self.ctrl_path = os.path.join(directory, self.CTRL_PATH)
 
-        # self.toeplitz =
+        try:
+            self.toeplitz_seed = self.read_toeplitz_seed()
+        except:
+            self.gen_toeplitz_seed(100)
 
         self.postproc: Optional[Postprocessing] = None
         self.bridge: Optional['Bridge'] = None
@@ -120,7 +126,9 @@ class KeyManager(Eventable):
             self.temp_key_file.clear()
             for i in range(0, len(key_part), self.KEY_FRAME_SIZE):
                 if i + self.KEY_FRAME_SIZE <= len(key_part):
-                    self.key_file.append(self.postproc.postprocess_key(key_part[i:i + self.KEY_FRAME_SIZE]))
+                    res = self.postproc.postprocess_key(key_part[i:i + self.KEY_FRAME_SIZE])
+                    # res = self.apply_toeplitz(res, 1000, binary_output=True)  # TODO use formula
+                    self.key_file.append(res)
                 else:
                     self.temp_key_file.append(key_part[i:])
                     break
@@ -136,3 +144,29 @@ class KeyManager(Eventable):
     def check_psk(self):
         if len(self.psk_file) <= self.cur_psk_pos:
             self.emit(KeyManager.EVENT_NOT_ENOUGH_PSK, KeyManager.PSK_SIZE)
+
+    def read_toeplitz_seed(self):
+        with open(self.toeplitz_path, 'r') as f:
+            data = [np.array([int(j) for j in i.split()]) for i in f.readlines()]  # col0\n row0
+            if len(data[0]) == 0:
+                raise Exception()
+            return data
+
+    def gen_toeplitz_seed(self, cnt):
+        with open(os.path.join(self.directory, self.TOEPLITZ_PATH), 'w') as f:
+            f.write('\n'.join([' '.join(map(str, np.random.randint(0, 10000, cnt))) for _ in range(2)]))
+
+        self.toeplitz_seed = self.read_toeplitz_seed()
+
+    def get_toeplitz_seed(self, h, w):
+        return self.toeplitz_seed[0][:h], self.toeplitz_seed[0][:w]
+
+    def apply_toeplitz(self, data, height, binary_output=False):
+        data = matmul_toeplitz(self.get_toeplitz_seed(height, len(data)), data)
+        return (data >= data.mean()).astype('uint8') if binary_output else data.astype('int32')
+
+
+if __name__ == "__main__":
+    km0 = KeyManager(directory=f'{os.getcwd()}/../../data/alice')
+    print(*km0.apply_toeplitz(np.array([0, 1, 0, 1, 1, 1, 0, 0, 1, 0]), height=10, binary_output=False), sep='\t')
+    print(*km0.apply_toeplitz(np.array([0, 1, 0, 1, 1, 1, 0, 0, 1, 0]), height=10, binary_output=True), sep='\t')

@@ -28,8 +28,6 @@ class Postprocessing:
     def bob_processing_finished(self, _):
         self.is_bob_process_key = True
 
-    # def apply_toeplitz(self):
-
     def count_qber(self, percent_send=0.1):
         index_count = int(len(self.key) * percent_send)
         indexes = np.random.choice(self.key, index_count, replace=False)
