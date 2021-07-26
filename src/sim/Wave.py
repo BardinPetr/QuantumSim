@@ -29,8 +29,9 @@ class Wave:
 
     @staticmethod
     def from_bin(data: bytes):
-        mu, qs0_real, qs0_imag, qs1_real, qs1_imag, time, photons_count, is_collapsed = struct.unpack(Wave.PACK_FORMAT,
-                                                                                                      data)
+        mu, qs0_real, qs0_imag, qs1_real, qs1_imag, time, photons_count, is_collapsed = struct.unpack(
+            Wave.PACK_FORMAT,
+            data)
 
         wave = Wave(
             mu,
@@ -55,3 +56,7 @@ class Wave:
             self.photons_count if self.photons_count is not None else 0,
             self.photons_count is not None
         )
+
+    @staticmethod
+    def get_struct_size():
+        return 41

@@ -8,10 +8,6 @@ from uuid import uuid4
 
 import networkx as nx
 from numpy.typing import NDArray
-from scapy.layers.inet import IP, TCP
-from scapy.layers.tuntap import LinuxTunPacketInfo
-from scapy.packet import Raw
-from scapy.sendrecv import sniff
 
 from src.Eventable import Eventable
 from src.connections.ConnectionManager import ConnectionManager
@@ -20,7 +16,7 @@ from src.crypto.KeyManager import KeyManager
 from src.messages.Message import Message
 from src.messages.Payloads import CryptMsg, DiscoverMsg, RPCMsg, ClassicMsg
 
-L.basicConfig(encoding='utf-8', level=L.DEBUG)
+L.basicConfig(encoding='utf-8', level=L.INFO)
 L.getLogger('matplotlib.font_manager').disabled = True
 
 
@@ -34,8 +30,6 @@ class Bridge(Eventable):
         Message.HEADER_CLASSIC: EVENT_INCOMING_CLASSIC
     }
 
-    WAVES_BATCH_SEPARATOR = b'\xba\xc4'
-
     USER_ALICE = 0
     USER_BOB = 1
 
@@ -44,6 +38,7 @@ class Bridge(Eventable):
     TUN_MTU = 3000
     PACKET_LENGTH = 30000
     SOCKET_MTU = 65000
+    WAVES_SOCKET_MTU = 41000
 
     def __init__(self,
                  ext_ip: str,
@@ -67,6 +62,10 @@ class Bridge(Eventable):
         self.is_tun_enabled = True
         try:
             from pytun import TunTapDevice, IFF_TUN
+            from scapy.layers.inet import IP, TCP
+            from scapy.layers.tuntap import LinuxTunPacketInfo
+            from scapy.packet import Raw
+            from scapy.sendrecv import sniff
         except ImportError:
             self.is_tun_enabled = False
 
@@ -180,9 +179,9 @@ class Bridge(Eventable):
 
     def _process_incoming_waves(self, conn: socket):
         while self.running:
-            data = conn.recv(self.SOCKET_MTU)
+            data = conn.recv(self.WAVES_SOCKET_MTU)
+
             if data:
-                print("WAVE", data)
                 self.emit(Bridge.EVENT_INCOMING_WAVES, data, threaded=True)
             else:
                 conn.close()
@@ -270,7 +269,7 @@ class Bridge(Eventable):
 
             if msg.header_mode == Message.HEADER_CLASSIC:
                 if not man.crypt.verify(data):
-                    print("FAILED")
+                    print("User verification failed")
                     return
 
             if msg.header_mode in Bridge.EVENT_BY_HEADER:
@@ -284,7 +283,7 @@ class Bridge(Eventable):
     def send_waves(self, ip: str, waves: [bytes]):
         s = self.get_socket(ip, 'w')
         if s is not None:
-            s.send(Bridge.WAVES_BATCH_SEPARATOR.join(waves))
+            s.send(b''.join(waves))
 
     def _create_msg(self, dest_ip: str, header: int, payload: Any):
         return Message(header, self.ext_ip, dest_ip, self.ext_ip, payload)
