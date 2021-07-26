@@ -1,5 +1,5 @@
 import time
-from threading import Thread
+from threading import Thread, Timer
 
 import zmq
 
@@ -24,6 +24,12 @@ class LockServer:
     def __del__(self):
         self.running = False
 
+    def check_kill(self, name, idx):
+        if idx in self.locks[name]:
+            print("KILLED", name)
+            self.locks[name].remove(idx)
+            self.pub.send_json({'name': name, 'id': idx})
+
     def _run(self):
         while self.running:
             data = self.rep.recv_json()
@@ -32,13 +38,17 @@ class LockServer:
                 self.locks[name] = self.locks.get(name, [])
                 if idx not in self.locks[name]:
                     self.locks[name].append(idx)
+                    Timer(2, self.check_kill, args=(name, idx)).start()
                 if len(self.locks[name]) == 1:
                     self.rep.send_json({'mode': LockServer.STATE_ACC})
                     # print(f"Acquired for {name}")
                     continue
             elif name in self.locks and len(self.locks[name]) > 0:  # release
                 # print(f"Sended release {name}  {self.locks}")
-                self.locks[name].pop(0)
+                d_id = None
+                while d_id != idx and len(self.locks[name]) > 0:
+                    d_id = self.locks[name].pop(0)
+                    print(d_id)
                 if len(self.locks[name]) > 0:
                     self.pub.send_json({'name': name, 'id': self.locks[name][0]})
 
@@ -86,6 +96,7 @@ class LockClient:
             # print("!", name)
             return True
         while name in self.acquired:
+            # print("WAITING for ", name)
             if timeout is not None and (time.time() - t_start) > timeout:
                 return False
             time.sleep(0.0001)

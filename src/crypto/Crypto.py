@@ -12,7 +12,6 @@ class Crypto:
     SIGNATURE_SPLITTER = b'\x24\xfa\x52\xa3'
 
     SIGN_MODE_BLAKE2B = 0
-    SIGN_MODE_CHACHA20_POLY1305 = 1
 
     def __init__(self, km: KeyManager, sign_mode=SIGN_MODE_BLAKE2B):
         self.km = km

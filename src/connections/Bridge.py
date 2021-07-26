@@ -207,7 +207,7 @@ class Bridge(Eventable):
         res: Optional[Message] = man.pop_outgoing_msg()
         if res is None:
             return
-        print(f"SEND {res}")
+        # print(f"SEND {res}")
         raw = res.serialize()
         if res.header_mode == Message.HEADER_CLASSIC:
             raw = man.crypt.sign(raw)
@@ -269,7 +269,7 @@ class Bridge(Eventable):
 
             if msg.header_mode == Message.HEADER_CLASSIC:
                 if not man.crypt.verify(data):
-                    print("User verification failed")
+                    print("SIGNATURE VERIFICATION FAILED")
                     return
 
             if msg.header_mode in Bridge.EVENT_BY_HEADER:

@@ -54,6 +54,7 @@ class ConnectionManager:
             acc_res = self.dlmc.acquire(self.identity, timeout=0.0001)
             if not acc_res or self.crypt.km.available() < 8 * (msg.payload.crypt_end - msg.payload.crypt_start):
                 return None
+            msg.payload.start_key_pos = self.km.cur_pos
             msg.payload.data = self.crypt.encrypt(msg.payload.data,
                                                   crypt_start=msg.payload.crypt_start,
                                                   crypt_end=msg.payload.crypt_end)
@@ -89,10 +90,12 @@ class ConnectionManager:
                 elif crypt_end > start_byte:
                     cur_ce = crypt_end - start_byte
 
-            res.append(CryptMsg(mode, cur_cs, cur_ce, index, len(pkts), data[start_byte:end_byte], encryptor))
+            res.append(CryptMsg(mode, cur_cs, cur_ce, index, len(pkts), data[start_byte:end_byte], encryptor=encryptor))
         return res
 
     def decrypt(self, msg: Message, force=False):
+        if msg.payload.start_key_pos != -1 and msg.payload.start_key_pos != self.km.cur_pos:
+            self.km.cur_pos = msg.payload.start_key_pos
         msg.payload.data = self.crypt.decrypt(msg.payload.data,
                                               crypt_start=msg.payload.crypt_start,
                                               crypt_end=msg.payload.crypt_end)
