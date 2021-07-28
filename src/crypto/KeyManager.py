@@ -40,14 +40,15 @@ class KeyManager(Eventable):
         try:
             self.toeplitz_seed = self.read_toeplitz_seed()
         except:
-            self.gen_toeplitz_seed(100)
+            self.gen_toeplitz_seed(1000)
 
         self.postproc: Optional[Postprocessing] = None
         self.bridge: Optional['Bridge'] = None
         self.peer_ip = ""
 
-        if not os.path.isfile(self.ctrl_path) or os.path.getsize(self.ctrl_path) == 0:
-            self.save_cur_pos(0, 0)
+        # TODO remove
+        # if not os.path.isfile(self.ctrl_path) or os.path.getsize(self.ctrl_path) == 0:
+        self.save_cur_pos(0, 0)
 
         self.cur_pos, self.cur_psk_pos = self.load_cur_pos()
 
@@ -96,7 +97,7 @@ class KeyManager(Eventable):
     def save_cur_pos(self, a=None, b=None):
         a = self.cur_pos if a is None else a
         b = self.cur_psk_pos if b is None else b
-        with open(self.ctrl_path, 'w+') as f:
+        with open(self.ctrl_path, 'w') as f:
             f.write(f"{a}\n{b}\n")
 
     def clear(self):
@@ -120,9 +121,8 @@ class KeyManager(Eventable):
 
     def append(self, key: NDArray):
         self.temp_key_file.append(key)
-
-        if False:
-        # if len(self.temp_key_file) > self.KEY_FRAME_SIZE:
+        # if True:
+        if False and len(self.temp_key_file) > self.KEY_FRAME_SIZE:
             key_part = self.temp_key_file.read_all()
             self.temp_key_file.clear()
             for i in range(0, len(key_part), self.KEY_FRAME_SIZE):

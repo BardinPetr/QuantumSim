@@ -4,7 +4,6 @@ import time
 import numpy as np
 from numpy.typing import NDArray
 
-from src.connections.Bridge import Bridge
 from src.messages.Message import Message
 from src.sim.QuantumState import BASIS_HV
 from src.sim.Wave import Wave
@@ -35,9 +34,19 @@ class Bob(EndpointDevice):
 
         self.processing_waves_batch = False
 
-    def on_waves_recv(self, msgs: bytes):
+        self.waves_buffer = b''
+
+    def on_waves_recv(self, raw: bytes):
+        self.waves_buffer += raw
+
         while self.processing_waves_batch:
             time.sleep(1e-3)
+        # print(len(self.waves_buffer))
+        if len(self.waves_buffer) < 41000:
+            return
+        msgs = self.waves_buffer[:41000]
+        self.waves_buffer = self.waves_buffer[41000:]
+        # print('reset ', len(self.waves_buffer))
 
         self.processing_waves_batch = True
 
@@ -46,13 +55,17 @@ class Bob(EndpointDevice):
             self(Wave.from_bin(msgs[i:i + size]))
 
         if len(self.bases) == self.session_size:
+            print('send remove lock request')
             self.send_classic_bind([], 2)
 
         self.processing_waves_batch = False
 
     def on_classic_recv(self, msg: Message):
-        # if msg.payload.mode == 1:
-        #     return
+        print('here!')
+        print(msg.payload.mode)
+
+        if msg.payload.mode != 0:
+            return
 
         self.fix_photon_statistics(len(msg.payload.data) * self.hard_params.laser_period)
 
@@ -64,7 +77,11 @@ class Bob(EndpointDevice):
         key: NDArray = np.array(self.base_key)[same_bases_ids]
         ids = np.where(key != 2)
 
+        print('saving key')
+
         self.save_key(key[ids].astype('bool'))
+
+        print('saved key')
 
         self.bases = []
         self.base_key = []
@@ -72,11 +89,13 @@ class Bob(EndpointDevice):
         self.received_waves_count = 0
         self.detector.reset()
 
+        print('sending message')
+
         self.send_classic_bind(same_bases_ids[ids].tolist(), 1)
 
     def save_key(self, key):
+        print("\nBOB GOT KEY:", *key[:25], sep="\t")
         self.emit(EndpointDevice.EVENT_KEY_FINISHED, (key, self.received_waves_count))
-        # print("\nBOB GOT KEY:", *key[:25], sep="\t")
 
     def gen_optic_scheme(self):
         self.hwp = HalfWavePlate(angle_control_cb=lambda _: -np.pi * self.choose_basis() / 4)

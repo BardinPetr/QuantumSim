@@ -48,7 +48,6 @@ class LockServer:
                 d_id = None
                 while d_id != idx and len(self.locks[name]) > 0:
                     d_id = self.locks[name].pop(0)
-                    print(d_id)
                 if len(self.locks[name]) > 0:
                     self.pub.send_json({'name': name, 'id': self.locks[name][0]})
 

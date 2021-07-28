@@ -1,4 +1,5 @@
 import logging as L
+import os
 import selectors
 import threading
 from socket import create_connection, create_server, socket
@@ -8,6 +9,12 @@ from uuid import uuid4
 
 import networkx as nx
 from numpy.typing import NDArray
+from pytun import TunTapDevice, IFF_TUN
+from scapy.layers.inet import IP, TCP
+from scapy.layers.tuntap import LinuxTunPacketInfo
+from scapy.packet import Raw
+from scapy.sendrecv import AsyncSniffer
+from tuntap import TunTap
 
 from src.Eventable import Eventable
 from src.connections.ConnectionManager import ConnectionManager
@@ -16,7 +23,7 @@ from src.crypto.KeyManager import KeyManager
 from src.messages.Message import Message
 from src.messages.Payloads import CryptMsg, DiscoverMsg, RPCMsg, ClassicMsg
 
-L.basicConfig(encoding='utf-8', level=L.INFO)
+L.basicConfig(encoding='utf-8', level=L.DEBUG)
 L.getLogger('matplotlib.font_manager').disabled = True
 
 
@@ -59,20 +66,11 @@ class Bridge(Eventable):
         self.data_port = data_port
         self.wave_port = wave_port
 
-        self.is_tun_enabled = True
-        try:
-            from pytun import TunTapDevice, IFF_TUN
-            from scapy.layers.inet import IP, TCP
-            from scapy.layers.tuntap import LinuxTunPacketInfo
-            from scapy.packet import Raw
-            from scapy.sendrecv import sniff
-        except ImportError:
-            self.is_tun_enabled = False
+        self.tun = TunTapDevice(flags=IFF_TUN)
+        # self.tun = TunTap(nic_type="Tun")
+        self.tun_up(tun_ip, tun_netmask)
 
-        if self.is_tun_enabled:
-            self.tun_ip = tun_ip
-            self.tun = TunTapDevice(flags=IFF_TUN)
-            self.tun_up(tun_ip, tun_netmask)
+        self.tun_sniff = None
 
         self.dlm_server = None
         self.dlm_ports = dlm_ports
@@ -135,12 +133,10 @@ class Bridge(Eventable):
             self.add_thread(self._process_incoming_waves, args=(socket_w,))
 
     def __del__(self):
-        self.running = False
+        self.stop()
 
-        try:
-            self.tun.close()
-        except:
-            pass
+    def stop(self, *_):
+        self.running = False
 
         if self.server_sock_d is not None:
             self.server_sock_d.close()
@@ -149,17 +145,17 @@ class Bridge(Eventable):
         if self.dlm_server is not None:
             del self.dlm_server
 
+        self.tun.close()
+        self.tun_sniff.stop()
+
     def tun_up(self, ip, netmask):
+        # self.tun.config(ip=ip, mask=netmask)
+        # os.system(f'ip link set dev {self.tun.name} mtu {self.TUN_MTU}')
+
         self.tun.addr = ip
         self.tun.netmask = netmask
         self.tun.mtu = self.TUN_MTU
         self.tun.up()
-        # self.tun.config(ip=ip, mask=netmask)
-        self.add_thread(self._process_incoming_tunnel)
-
-    def _process_incoming_tunnel(self):
-        if not self.is_tun_enabled:
-            return
 
         def proc(x):
             if x.haslayer(TCP):
@@ -168,9 +164,11 @@ class Bridge(Eventable):
                 except:
                     return
                 raw = (LinuxTunPacketInfo() / x).convert_to(Raw).load
+                print(raw)
                 self.send_crypt(ip, CryptMsg.MODE_TUN, raw)
 
-        self.tun_sniff = sniff(count=0, iface=self.tun.name, prn=proc)
+        self.tun_sniff = AsyncSniffer(count=0, iface=self.tun.name, prn=proc)
+        self.tun_sniff.start()
 
     def _process_accept_socket(self, sock, mask, sock_name):
         if mask & selectors.EVENT_READ:
@@ -182,7 +180,7 @@ class Bridge(Eventable):
             data = conn.recv(self.WAVES_SOCKET_MTU)
 
             if data:
-                self.emit(Bridge.EVENT_INCOMING_WAVES, data, threaded=True)
+                self.emit(Bridge.EVENT_INCOMING_WAVES, data)  # , threaded=True)
             else:
                 conn.close()
 
@@ -328,6 +326,8 @@ class Bridge(Eventable):
         ])
 
     def send_classic(self, dest_ip: str, data: list[int], mode=0):
+        print(f'send classic to {dest_ip} using mode {mode}:', data)
+
         self.send_msg(self._create_msg(dest_ip, Message.HEADER_CLASSIC,
                                        ClassicMsg(mode, data)))
 
@@ -360,11 +360,9 @@ class Bridge(Eventable):
     # Auto discovery
 
     def _process_discover(self):
-        if not self.is_tun_enabled:
-            return
-
         while self.running:
-            payload = DiscoverMsg(0, self.tun_ip, self.get_connections_param_map('ext_ip'))
+            payload = DiscoverMsg(0, self.tun.addr, self.get_connections_param_map('ext_ip'))
+            # payload = DiscoverMsg(0, self.tun.ip, self.get_connections_param_map('ext_ip'))
             self.broadcast(self._create_msg("", Message.HEADER_DISCOVER, payload))
             sleep(10)
 

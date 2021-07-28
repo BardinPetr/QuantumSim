@@ -3,6 +3,7 @@ import math
 import numpy as np
 
 from src.sim.data.HardwareParams import HardwareParams
+from src.utils.BinaryFile import BinaryFile
 
 
 def h(x):
@@ -52,5 +53,9 @@ def simulate_bb84(params: HardwareParams, f_ec: float = 1.2):
 
 
 if __name__ == "__main__":
-    # generate()
-    pass
+    f0 = BinaryFile(path='/home/petr/Desktop/QuantumLink/data/alice/key')
+    f1 = BinaryFile(path='/home/petr/Desktop/QuantumLink/data/bob/key')
+
+    data = f0.read_all()
+    res = key_with_mist_gen(data, 0.05)
+    f1.append(res)

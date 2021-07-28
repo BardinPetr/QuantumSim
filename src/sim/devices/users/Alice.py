@@ -33,7 +33,7 @@ class Alice(EndpointDevice):
 
         self.gen_optic_scheme()
 
-        self.is_bob_received_all_waves = False
+        self.is_bob_processed_all_bases = False
         self.is_bob_processed_all_waves = False
 
     def on_classic_recv(self, msg: Message):
@@ -41,14 +41,16 @@ class Alice(EndpointDevice):
             key = np.array(self.base_key)[msg.payload.data]
             self.save_key(key)
 
-            self.is_bob_processed_all_waves = True
+            print('receive remove lock request')
+
+            self.is_bob_processed_all_bases = True
 
         elif msg.payload.mode == 2:
-            self.is_bob_received_all_waves = True
+            self.is_bob_processed_all_waves = True
 
     def save_key(self, key):
+        print("ALICE GOT KEY:", *key[:25].tolist(), sep="\t")
         self.emit(EndpointDevice.EVENT_KEY_FINISHED, (key, self.session_size))
-        # print("ALICE GOT KEY:", *key[:25].tolist(), sep="\t")
 
     def start(self, progress_bar=True):
         while True:
@@ -60,19 +62,21 @@ class Alice(EndpointDevice):
             if len(self.wave_send_batch) != 0:
                 self.send_waves_to_bob()
 
-            while not self.is_bob_received_all_waves:
+            while not self.is_bob_processed_all_waves:
                 time.sleep(1e-3)
 
+            print('move next')
+            self.is_bob_processed_all_waves = False
+
             self.check_bases()
-            self.is_bob_received_all_waves = False
 
     def check_bases(self):
         self.send_classic_bind(self.bases, 0)
 
-        while not self.is_bob_processed_all_waves:
+        while not self.is_bob_processed_all_bases:
             time.sleep(1e-3)
 
-        self.is_bob_processed_all_waves = False
+        self.is_bob_processed_all_bases = False
 
     def get_bit(self):
         self.base_key.append(rand_bin())

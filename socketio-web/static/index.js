@@ -4,6 +4,8 @@ $(() => {
 
     const socket = io();
 
+    append('<img height="200px" src="photo.jpg"/>', 'start')
+
     socket.on('data', msg => append(msg, "start"));
 
     $("#send-btn").click(() => {
